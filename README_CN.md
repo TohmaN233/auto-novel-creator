@@ -1,5 +1,7 @@
 # Claude Code 小说生成工作流
 
+**[English README](README.md)**
+
 一套 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 的 slash command 技能，能将故事大纲自动转化为完整的双语插图小说，导出为 EPUB 和 DOCX。
 
 ## 前提条件
@@ -8,7 +10,7 @@
 
 ## 实际案例
 
-用一份184页的 Battle Spirits 卡牌游戏世界观 PDF 作为大纲，生成了一部 **12章双语小说**（日语主体 + 中文文学意译），约12万字中文，内嵌98张卡牌插画。从 PDF 导入到最终 EPUB 导出，全程在单个 Claude Code 会话内完成。
+用一份 Battle Spirits 卡牌游戏世界观 PDF 作为大纲，生成了一部 **12章双语小说**（日语主体 + 中文文学意译），约12万字中文，内嵌98张卡牌插画。从 PDF 导入到最终 EPUB 导出，全程在单个 Claude Code 会话内完成。
 
 ## 灵感与致谢
 

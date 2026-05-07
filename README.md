@@ -1,5 +1,7 @@
 # Claude Code Novel-Writing Pipeline
 
+**[中文版 README](README_CN.md)**
+
 A set of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash-command skills that turn a story outline into a fully drafted, bilingual, illustrated novel — exported as EPUB and DOCX.
 
 ## A detailed chapter-by-chapter outline of your novel is necessary
