@@ -12,6 +12,8 @@
 
 用一份 Battle Spirits 卡牌游戏世界观 PDF 作为大纲，生成了一部 **12章双语小说**（日语主体 + 中文文学意译），约12万字中文，内嵌98张卡牌插画。从 PDF 导入到最终 EPUB 导出，全程在单个 Claude Code 会话内完成。
 
+成品下载：[日语版 EPUB](examples/output/BS_ultimate_ja.epub) | [中文版 EPUB](examples/output/BS_ultimate_zh.epub)
+
 ## 灵感与致谢
 
 本项目受 [wanshuiyin/Auto-claude-code-research-in-sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) 以及 SillyTavern 社群关于将 Claude Code 从软件工程扩展到创意工作流的讨论启发。

@@ -12,6 +12,8 @@ AI-Agent cannot produce a consistent story without a carefully written outline.
 
 This pipeline was used to produce a **12-chapter bilingual novel** (JA primary, ZH literary translation) from a Battle Spirits card game lore PDF, complete with 98 embedded card illustrations. The full process — from PDF ingestion to final EPUB — run inside a single Claude Code session, and completed with around 120000 Chinese characters.
 
+Sample output: [Japanese EPUB](examples/output/BS_ultimate_ja.epub) | [Chinese EPUB](examples/output/BS_ultimate_zh.epub)
+
 ## Inspiration & Credits
 
 This project was inspired by [wanshuiyin/Auto-claude-code-research-in-sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) and conversations in the SillyTavern community about pushing Claude Code beyond software engineering into creative workflows. The core idea came directly from those discussions.
