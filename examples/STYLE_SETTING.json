@@ -1,0 +1,16 @@
+{
+  "genre": "fantasy-scifi",
+  "genre_name": "Fantasy-SciFi Hybrid",
+  "pov": "third_limited",
+  "pov_description": "Third-person limited (tightly bound to the POV character's knowledge boundary)",
+  "tense": "past",
+  "chapter_word_count_target": 8000,
+  "chapter_word_count_range": [6000, 10000],
+  "prose_density": "rich",
+  "sentence_rhythm": "mixed",
+  "dialogue_density": "high",
+  "style_notes": "Provided by custom style file — loaded at runtime from custom_style_file path.",
+  "custom_style_file": null,
+  "chapter_ending_rule": "End each chapter with an intellectual cliffhanger or unresolved question",
+  "configured_at": "2026-01-01T00:00:00Z"
+}

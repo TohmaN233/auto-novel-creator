@@ -1,0 +1,36 @@
+# Novel project output (generated, not part of the template)
+novel/draft/
+novel/output/
+novel/assets/*.jpeg
+novel/assets/*.png
+novel/assets/*.jpg
+novel/assets/export/
+novel/OUTLINE.md
+novel/NOVEL_STATE.json
+novel/MANIFEST.md
+novel/characters/
+novel/settings/TRANSLATION_GLOSSARY.md
+novel/settings/TIMELINE.md
+
+# Claude Code local settings (user-specific permissions)
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Temporary scripts
+*.tmp

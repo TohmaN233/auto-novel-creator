@@ -1,0 +1,14 @@
+{
+  "mode": "bilingual",
+  "primary_language": "ja",
+  "primary_language_name": "Japanese",
+  "secondary_language": "zh",
+  "secondary_language_name": "Simplified Chinese",
+  "translation_style": "literary",
+  "translation_timing": "per-chapter",
+  "output_filenames": {
+    "primary": "novel_ja",
+    "secondary": "novel_zh"
+  },
+  "configured_at": "2026-01-01T00:00:00Z"
+}
