@@ -90,6 +90,7 @@ Read all context files before writing any chapter:
 5. `novel/settings/CHAPTER_TEMPLATE.md` — load structural template
 6. **Previous chapter file** (if exists) — read the last 200–300 words to ensure continuity of prose rhythm and scene flow
 7. `novel/NOVEL_STATE.json` — load current progress state
+8. `novel/settings/TIMELINE.md` (if exists) — consult the story timeline to ensure correct in-world dates, event ordering, and time gaps between chapters. This file tracks story-day numbers, key events, and scene-paragraph references for every chapter.
 
 ### Step 2: Pre-Writing Analysis
 
@@ -197,7 +198,7 @@ These `![](path)` markers are preserved in the markdown and will be embedded aut
 
 ### Step 4: Self-Consistency Check
 
-After drafting, run the character consistency audit:
+After drafting, run the character consistency audit (per `../shared-references/character-consistency.md`):
 
 For each named character in the chapter:
 1. Does their physical description match the bible? (If described)
@@ -296,6 +297,11 @@ Update `novel/NOVEL_STATE.json`:
 - Record word count for this chapter
 - Log any new characters added
 - Log any character knowledge state updates
+
+Update `novel/settings/TIMELINE.md` (if it exists):
+- Append a new section for this chapter with a table of story-day numbers, key events, scene paragraph references, and notes
+- Ensure continuity with the previous chapter's ending day
+- If TIMELINE.md does not exist yet, create it with the header format and this chapter's entries
 
 ### Step 8: Progress Report
 

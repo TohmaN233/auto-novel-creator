@@ -46,6 +46,7 @@ novel/
     LANGUAGE_SETTING.json       # Mono/bilingual config
     STYLE_SETTING.json          # Genre, POV, word-count targets
     CHAPTER_TEMPLATE.md         # Per-genre structural template
+    TIMELINE.md                 # Story timeline (in-world dates & events per chapter)
     TRANSLATION_GLOSSARY.md     # Proper noun translation table (bilingual)
   draft/
     ja/ch01_ja.md ... ch12_ja.md    # Primary language chapters
