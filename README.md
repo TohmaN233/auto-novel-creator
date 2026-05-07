@@ -8,7 +8,7 @@ AI-Agent cannot produce a consistent story without a carefully written outline.
 
 ## Demo
 
-This pipeline was used to produce a **12-chapter bilingual novel** (JA primary, ZH literary translation) from a 184-page Battle Spirits card game lore PDF, complete with 98 embedded card illustrations. The full process — from PDF ingestion to final EPUB — ran inside a single Claude Code session.
+This pipeline was used to produce a **12-chapter bilingual novel** (JA primary, ZH literary translation) from a Battle Spirits card game lore PDF, complete with 98 embedded card illustrations. The full process — from PDF ingestion to final EPUB — run inside a single Claude Code session, and completed with around 120000 Chinese characters.
 
 ## Inspiration & Credits
 
