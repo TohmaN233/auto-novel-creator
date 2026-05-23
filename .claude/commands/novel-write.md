@@ -290,7 +290,7 @@ pure metadata, not file contents:
 | `{{CHAPTER_TITLE}}` | From OUTLINE.md | `家庭課題` |
 | `{{PREV_CHAPTER}}` | Previous chapter number | `18` |
 | `{{WORD_COUNT_TARGET}}` | STYLE_SETTING or NOVEL_STATE | `8000–12000` |
-| `{{PROJECT_DIR}}` | Active project path | `novel-pkm` |
+| `{{PROJECT_DIR}}` | Active project path | `my-novel` |
 | `{{WRITER_DIR}}` | From active_writer.json | `writer_persona/Elie` |
 | `{{OUTPUT_MODE}}` | From NOVEL_STATE.json `journal_mode` | See template appendix: "full" / "brief" / "off" |
 | `{{SPECIAL_NOTES}}` | Your editorial notes | See 3b |

@@ -35,7 +35,7 @@ Extract from `$ARGUMENTS`:
 
 Examples:
 ```
-/novel-outline "BS背景世界观故事究极篇.pdf chapters:12 words:8000"
+/novel-outline "my_outline.pdf chapters:12 words:8000"
 /novel-outline "outline.txt 分20章 每章3000字"
 /novel-outline "raw_notes.md chapters:8"        ← auto word count
 /novel-outline "story.pdf"                       ← auto chapter count + word count

@@ -76,7 +76,7 @@ The system supports multiple novel projects, each in its own directory. The acti
 // .claude/active-project.json
 {
   "project_dir": "novel",
-  "project_name": "BS背景世界観物語：究極篇"
+  "project_name": "My Novel"
 }
 ```
 
@@ -182,7 +182,7 @@ This keeps your context clean and gives the subagent first-hand access to source
 2. **Fill parameter slots only** — these are pure metadata, not file contents:
    - `{{CHAPTER_NUMBER}}`, `{{CHAPTER_TITLE}}`, `{{PREV_CHAPTER}}`
    - `{{WORD_COUNT_TARGET}}` (from STYLE_SETTING.json or NOVEL_STATE.json)
-   - `{{PROJECT_DIR}}` (e.g., `novel-pkm`)
+   - `{{PROJECT_DIR}}` (e.g., `my-novel`)
    - `{{WRITER_DIR}}` (e.g., `writer_persona/Elie`)
    - `{{OUTPUT_MODE}}` — journal mode block from template appendix ("full" / "brief" / "off")
    - `{{SPECIAL_NOTES}}` — editor's chapter-specific notes (warnings from prior proof-reader, patterns to avoid, fusion context). Keep brief. This is the ONLY editorial content that crosses the boundary.
