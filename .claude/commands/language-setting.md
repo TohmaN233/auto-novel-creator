@@ -1,6 +1,6 @@
 ---
 name: language-setting
-description: "Configure language settings for novel writing. Supports monolingual and bilingual modes. In bilingual mode, each chapter is written in the primary language then translated to the secondary language, producing separate output files. Use when user says \"语言设置\", \"language setting\", \"双语写作\", \"bilingual\", \"中英双语\", or wants to configure the writing language before starting a novel."
+description: "Configure language settings for novel writing. Supports monolingual, bilingual, and dialogue-bilingual modes. Dialogue-bilingual writes prose in one language with character dialogue in another language plus inline translation — saves tokens while preserving authentic dialogue voice. Use when user says \"语言设置\", \"language setting\", \"双语写作\", \"bilingual\", \"台词双语\", \"dialogue-bilingual\", \"中英双语\", or wants to configure the writing language before starting a novel."
 argument-hint: [primary-language — secondary-language (optional)]
 allowed-tools: Read, Write, Edit, Bash(*)
 ---
@@ -9,16 +9,21 @@ allowed-tools: Read, Write, Edit, Bash(*)
 
 Configure language for: **$ARGUMENTS**
 
+## Project Resolution
+
+Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
+
 ## Overview
 
-This skill sets and persists the language configuration for the novel-writing pipeline. The configuration is saved to `novel/settings/LANGUAGE_SETTING.json` and read by `/novel-write` and `/novel-export`.
+This skill sets and persists the language configuration for the novel-writing pipeline. The configuration is saved to `{project}/settings/LANGUAGE_SETTING.json` and read by `/novel-write` and `/novel-export`.
 
-Two modes are available:
+Three modes are available:
 
 | Mode | Description |
 |------|-------------|
 | **Monolingual** | Write entirely in one language. One output file per format. |
 | **Bilingual** | Write in primary language, then translate each chapter to secondary language. Produces separate output files for each language. |
+| **Dialogue-bilingual** | Prose in writing language; character dialogue in dialogue language with inline translation. Single output file. Saves ~40-50% tokens vs full bilingual while keeping authentic dialogue voice and avoiding translationese in narration. |
 
 ## Supported Languages
 
@@ -48,7 +53,13 @@ Extract from `$ARGUMENTS`:
    - Two language codes separated by "/" or "+"
    - "同时翻译" / "translate to" / "with translation"
 
-3. **Secondary language** — only for bilingual mode
+2b. **Dialogue-bilingual mode** — activated by any of:
+   - "台词双语" / "对白双语" / "dialogue-bilingual" / "dialogue bilingual"
+   - "台词[语言]" / "dialogue in [language]" (e.g., "台词日语", "dialogue in Japanese")
+   - "写作语言X台词语言Y" / "prose X dialogue Y"
+   When detected, set `mode: "dialogue-bilingual"`. The first language is the **writing language** (narration/prose), the second is the **dialogue language** (character speech). If only dialogue language is specified, infer writing language from primary language.
+
+3. **Secondary language** — for bilingual mode; **dialogue language** — for dialogue-bilingual mode
    - Parsed from keywords: if primary is `zh`, default secondary is `en`; if primary is `en`, default secondary is `zh`
 
 4. **Translation style** — optional quality preference:
@@ -56,7 +67,7 @@ Extract from `$ARGUMENTS`:
    - "意译" / "literary" / "流畅" → `literary` (default)
    - "忠实原文" → `faithful`
 
-5. **Simultaneous vs. post-hoc translation**:
+5. **Simultaneous vs. post-hoc translation** (bilingual mode only; dialogue-bilingual always translates inline):
    - "同步翻译" / "chapter by chapter" → translate immediately after each chapter is written
    - "最后翻译" / "translate at end" → translate all chapters after writing is complete (default)
 
@@ -69,11 +80,14 @@ Parse `$ARGUMENTS` and confirm the detected settings with the user:
 ```
 Language settings detected:
 
-Mode: [Monolingual / Bilingual]
+Mode: [Monolingual / Bilingual / Dialogue-bilingual]
 Primary language: [language name] ([code])
-[Secondary language: [language name] ([code])]   (bilingual only)
-[Translation style: literary / literal / faithful]   (bilingual only)
-[Translation timing: per-chapter / post-writing]   (bilingual only)
+[Secondary language: [language name] ([code])]                     (bilingual only)
+[Writing language: [name] ([code])]                                (dialogue-bilingual only)
+[Dialogue language: [name] ([code])]                               (dialogue-bilingual only)
+[Translation style: literary / literal / faithful]                 (bilingual / dialogue-bilingual)
+[Translation timing: per-chapter / post-writing]                   (bilingual only)
+[Dialogue format: [original_wrapper] → [translation_wrapper]]      (dialogue-bilingual only)
 
 Confirm? (or adjust any setting)
 ```
@@ -133,17 +147,58 @@ For monolingual:
 }
 ```
 
-Save to `novel/settings/LANGUAGE_SETTING.json`.
+For dialogue-bilingual:
+```json
+{
+  "mode": "dialogue-bilingual",
+  "writing_language": "zh",
+  "writing_language_name": "简体中文",
+  "dialogue_language": "ja",
+  "dialogue_language_name": "日本語",
+  "dialogue_format": {
+    "original_wrapper": "「{text}」",
+    "translation_wrapper": "（{text}）",
+    "placement": "next-line"
+  },
+  "translation_style": "literary",
+  "output_filenames": {
+    "primary": "novel_zh"
+  },
+  "configured_at": "[ISO timestamp]"
+}
+```
+
+**Dialogue format explanation** (dialogue-bilingual only):
+- `original_wrapper`: brackets for the dialogue-language line. Default `「」` for Japanese, `""` for English.
+- `translation_wrapper`: brackets for the writing-language translation. Default `（）`.
+- `placement`: always `"next-line"` — translation immediately follows the original on the next line.
+
+**Example output** (writing: Chinese, dialogue: Japanese):
+```markdown
+诺德凝视着反转大陆。手中的P度量仪不断闪烁，数值远超预期。
+
+「これは単なる偶然じゃない。P度量の測定値がすべてを物語っている」
+（这不是单纯的巧合。P度量的测定值已经说明了一切）
+
+他放下仪器，目光扫过其他五名调查员。
+
+「全員、覚悟はいいか。これから先は、既知のデータが通用しない領域だ」
+（各位，准备好了吗。从这里开始，是已知数据无法适用的领域）
+```
+
+Note: narration is exclusively in the writing language. All character dialogue appears first in the dialogue language, then in the writing language on the next line. Internal monologue in dialogue markers follows the same rule.
+
+Save to `{project}/settings/LANGUAGE_SETTING.json`.
 
 ### Step 3.5: Create Translation Glossary (Bilingual Mode Only)
 
 Skip this step for monolingual mode.
 
-Create `novel/settings/TRANSLATION_GLOSSARY.md` — the single source of truth for all cross-language name and term mappings. Every translation in `/novel-write` must consult this file before rendering any proper noun.
+Create `{project}/settings/TRANSLATION_GLOSSARY.md` — the single source of truth for all cross-language name and term mappings. Every translation in `/novel-write` must consult this file before rendering any proper noun.
 
 **Pre-populate from CHARACTER_BIBLE (if it already exists):**
 
-Read `novel/characters/CHARACTER_BIBLE.md` and extract every named character. For each, create a glossary row with:
+Read `{project}/characters/CHARACTER_BIBLE.md` and extract every named character. For each, create a glossary row with:
 - Primary-language name (as written in the bible)
 - Secondary-language translation (to be filled by user or inferred from context)
 - Romanization if applicable
@@ -205,29 +260,34 @@ After creating the template, **scan CHARACTER_BIBLE.md and fill in the Character
 Present the filled-in glossary to the user:
 
 ```
-译名表已创建：novel/settings/TRANSLATION_GLOSSARY.md
+译名表已创建：{project}/settings/TRANSLATION_GLOSSARY.md
 
 已从 CHARACTER_BIBLE 预填 [N] 个人名条目。
 请在开始写作前填入译名列（否则翻译阶段将使用自动推断译名并标记为"待确认"）。
 
-novel/settings/TRANSLATION_GLOSSARY.md
+{project}/settings/TRANSLATION_GLOSSARY.md
 ```
 
 ### Step 4: Create Draft Directory Structure
 
 ```bash
-mkdir -p novel/draft
-mkdir -p novel/settings
-mkdir -p novel/output
+mkdir -p {project}/draft
+mkdir -p {project}/settings
+mkdir -p {project}/output
 ```
 
 For bilingual mode, also create language-specific draft folders:
 ```bash
-mkdir -p novel/draft/zh
-mkdir -p novel/draft/en
+mkdir -p {project}/draft/zh
+mkdir -p {project}/draft/en
 ```
-
 (Replace `zh` and `en` with the actual language codes.)
+
+For dialogue-bilingual mode, **no language subdirectories** — single output:
+```bash
+mkdir -p {project}/draft
+# All chapters go to {project}/draft/chNN.md — both languages are inline
+```
 
 ### Step 5: Confirm Output
 
@@ -240,14 +300,14 @@ Primary: [language name]
 [Translation: [style], [timing]]
 
 Draft directories:
-- novel/draft/          (primary language chapters)
-[- novel/draft/[code]/  (secondary language chapters)]   (bilingual only)
+- {project}/draft/          (primary language chapters)
+[- {project}/draft/[code]/  (secondary language chapters)]   (bilingual only)
 
 Output files will be named:
-- novel/output/novel.[ext]              (monolingual)
-[- novel/output/novel_[code].[ext]      (bilingual)]
+- {project}/output/novel.[ext]              (monolingual)
+[- {project}/output/novel_[code].[ext]      (bilingual)]
 
-Settings file: novel/settings/LANGUAGE_SETTING.json
+Settings file: {project}/settings/LANGUAGE_SETTING.json
 
 Next steps:
 - /novel-style          → configure writing style and chapter length
@@ -260,9 +320,9 @@ Next steps:
 When `/novel-write` operates in bilingual mode, it follows this per-chapter sequence:
 
 1. Write the chapter in the primary language
-2. Save to `novel/draft/[primary-code]/chNN.md`
+2. Save to `{project}/draft/[primary-code]/chNN.md`
 3. Translate to secondary language (immediately if `per-chapter`, or deferred if `post-writing`)
-4. Save translation to `novel/draft/[secondary-code]/chNN.md`
+4. Save translation to `{project}/draft/[secondary-code]/chNN.md`
 5. Both files get the same filename prefix (e.g., `ch01.md`) for easy pairing
 
 **Character name consistency across languages**: when a character has both a Chinese name and an English name (e.g., 林夏 / Lin Xia), both forms are registered in the CHARACTER_BIBLE and used consistently in the respective language version.
@@ -270,6 +330,39 @@ When `/novel-write` operates in bilingual mode, it follows this per-chapter sequ
 **Chapter heading format** (must match in both languages for TOC generation):
 - Primary (zh): `# 第N章：[章节名]`
 - Secondary (en): `# Chapter N: [Title]`
+
+## Dialogue-Bilingual Writing Notes
+
+When `/novel-write` operates in dialogue-bilingual mode:
+
+1. Write the chapter as a single file with inline bilingual dialogue
+2. Save to `{project}/draft/chNN.md`
+3. No separate translation step — dialogue translation happens inline during writing
+
+**Core rules:**
+- All narration, description, and internal exposition: **writing language only**
+- All character dialogue (「」marked speech): **dialogue language first, then writing-language translation on next line**
+- Internal monologue in dialogue markers: same bilingual treatment
+- Character thoughts NOT in dialogue markers: writing language only
+
+**Dialogue format:**
+```
+[writing-language narration]
+
+「dialogue-language speech」
+（writing-language translation）
+
+[writing-language narration continues]
+```
+
+**Why this mode exists:**
+- Saves ~40-50% tokens vs full bilingual (only dialogue is doubled, not narration)
+- Dialogue in the source language preserves authentic character voice and register
+
+**Translation glossary**: still required. All proper nouns must be consistent between dialogue-language lines and their writing-language translations. The glossary's character name table maps names across both languages.
+
+**Chapter heading format** (dialogue-bilingual):
+- `# 第N章　[章节名]` (writing-language heading only — single file, single TOC)
 
 ## Key Rules
 

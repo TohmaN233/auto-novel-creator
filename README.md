@@ -2,303 +2,388 @@
 
 **[中文版 README](README_CN.md)**
 
-A set of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) slash-command skills that turn a story outline into a fully drafted, bilingual, illustrated novel — exported as EPUB and DOCX.
+A structured novel-writing system for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that turns a story outline into a fully drafted, proofread, illustrated novel — with EPUB export.
 
-## A detailed chapter-by-chapter outline of your novel is necessary
+It uses an **orchestrator + writer subagent + proof-reader** pattern: you act as editor, a writer persona drafts each chapter in independent context, and a mechanical proof-reader catches consistency errors. The three roles never share context, which eliminates blind spots.
 
-AI-Agent cannot produce a consistent story without a carefully written outline.
+Battle-tested on a 33-chapter, 250,000+ character novel with bilingual dialogue (Chinese narration / Japanese dialogue), fusion expansion of an existing work, and 38 embedded illustrations.
 
-## Demo
+---
 
-This pipeline was used to produce a **12-chapter bilingual novel** (JA primary, ZH literary translation) from a Battle Spirits card game lore PDF, complete with 98 embedded card illustrations. The full process — from PDF ingestion to final EPUB — run inside a single Claude Code session, and completed with around 120000 Chinese characters.
-
-Sample output: [Japanese EPUB](examples/output/BS_ultimate_ja.epub) | [Chinese EPUB](examples/output/BS_ultimate_zh.epub)
-
-## Inspiration & Credits
-
-This project was inspired by [wanshuiyin/Auto-claude-code-research-in-sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) and conversations in the SillyTavern community about pushing Claude Code beyond software engineering into creative workflows. The core idea came directly from those discussions.
-
-## How It Works
-
-The pipeline chains seven slash-command skills into an end-to-end novel-writing lifecycle:
+## Architecture
 
 ```
-  PDF / text outline
-        |
-        v
-  /novel-writing-pipeline  (orchestrator)
-        |
-        +---> /character-design    Phase 1: Build CHARACTER_BIBLE.md
-        +---> /language-setting    Phase 2: Configure mono/bilingual mode
-        +---> /novel-style         Phase 3: Genre, POV, chapter length, custom style
-        +---> /novel-write         Phase 4: Draft chapters (+ translate if bilingual)
-        +---> /asset-map           Phase 4.5: Scan, filter, place images into chapters
-        +---> /novel-export        Phase 5: Assemble & export to EPUB / DOCX / PDF / TXT
+  Editor (Orchestrator)                    Writer (Subagent)
+  ┌──────────────────────┐                ┌───────────────────────┐
+  │ 1. Load NOVEL_STATE  │                │ Reads ALL files itself │
+  │ 2. Scan outline      │   template +   │ (persona, style, bible,│
+  │ 3. Fill template     │───paths only──>│  glossary, timeline,   │
+  │    (paths + notes)   │                │  outline, prev chapter)│
+  │                      │                │                        │
+  │                      │   file paths   │ Writes chapter to disk │
+  │ 4. Read draft file <─│<──  only  ─────│ Writes notes to disk   │
+  │                      │                │ Updates memo.md        │
+  │ 5. /proof-reader     │                └───────────────────────┘
+  │    (6 categories)    │
+  │ 6. Fix issues (Edit) │
+  │ 7. Update state      │
+  └──────────────────────┘
+
+  Boundary rules:
+  • Editor NEVER reads content files for the writer
+  • Writer NEVER updates NOVEL_STATE / TIMELINE / CONTINUITY_MAP
+  • SPECIAL_NOTES (≤300 words) is the ONLY editorial content injected
 ```
 
-### Persistent State
+### Why This Pattern?
 
-All intermediate state lives on disk — the pipeline can be interrupted and resumed at any point:
+- **Independent context** — the writer starts fresh, avoiding the editor's accumulated bias
+- **Load-instructions, not content-injection** — the subagent reads files itself via tool calls, so the editor's context stays clean
+- **Mechanical + aesthetic review** — proof-reader runs pattern checks; editor adds persona fidelity judgment
+- **Resumable** — all state on disk; interrupt and resume at any chapter
 
-```
-novel/
-  OUTLINE.md                    # Source outline (input, never modified)
-  NOVEL_STATE.json              # Pipeline progress tracker
-  characters/
-    CHARACTER_BIBLE.md          # Living character reference
-  settings/
-    LANGUAGE_SETTING.json       # Mono/bilingual config
-    STYLE_SETTING.json          # Genre, POV, word-count targets
-    CHAPTER_TEMPLATE.md         # Per-genre structural template
-    TIMELINE.md                 # Story timeline (in-world dates & events per chapter)
-    TRANSLATION_GLOSSARY.md     # Proper noun translation table (bilingual)
-  draft/
-    ja/ch01_ja.md ... ch12_ja.md    # Primary language chapters
-    zh/ch01_zh.md ... ch12_zh.md    # Secondary language chapters
-    FULL_NOVEL_ja.md                # Assembled full text
-    FULL_NOVEL_zh.md
-  assets/
-    IMAGE_MAP.json              # Image inventory with status tracking
-    *.jpeg / *.png              # Raw images (from PDF or user-provided)
-    export/                     # Curated images for embedding
-  output/
-    novel_ja.epub / .docx       # Final exports
-    novel_zh.epub / .docx
-```
-
-## Skills Reference
-
-### `/novel-writing-pipeline` — Orchestrator
-
-The top-level entry point. Parses your outline source and configuration, then drives all other skills in sequence.
-
-```
-/novel-writing-pipeline "my_outline.pdf -bilingual ja->zh -genre: fantasy -chapter_words: 8000"
-```
-
-**Key parameters** (all optional, with sane defaults):
-
-| Parameter      | Example                                   | Default                 |
-| -------------- | ----------------------------------------- | ----------------------- |
-| Outline source | `outline.md`, `story.pdf`, or inline text | *(required)*            |
-| Language mode  | `-bilingual ja->zh`, `中英双语`           | monolingual zh          |
-| Genre          | `-genre: romance`, `玄幻`                 | auto-detected           |
-| Chapter length | `-chapter_words: 5000`, `每章3000字`      | 3000                    |
-| POV            | `-pov: first_person`, `第一人称`          | third_limited           |
-| Output format  | `-output: epub pdf`                       | epub + docx             |
-| Auto-proceed   | `-auto-proceed: true`                     | false (pauses at gates) |
-| Custom style   | `-custom_style_file: "style_guide.md"`    | none                    |
-
-**Gates**: By default the pipeline pauses after Phase 1 (character review), Phase 2 (language confirm), and Phase 3 (style confirm) for user approval before autonomous writing begins.
-
-### `/character-design` — Character Bible Generator
-
-Reads the outline and produces `CHARACTER_BIBLE.md` with structured profiles: appearance anchors, personality cores, speech fingerprints, relationship maps, and knowledge boundaries.
-
-```
-/character-design "novel/OUTLINE.md"
-/character-design "add: a rival swordsman who appears in Chapter 8"
-```
-
-Characters are categorized as major / supporting / minor. The bible is a living document — `/novel-write` automatically creates stub profiles for new characters as they appear.
-
-### `/language-setting` — Language Configuration
-
-Configures monolingual or bilingual mode. In bilingual mode, each chapter is first written in the primary language, then translated with glossary enforcement.
-
-```
-/language-setting "ja -> zh, literary translation, per-chapter"
-/language-setting "zh"  # monolingual Chinese
-```
-
-**Translation features**:
-
-- Per-chapter or post-writing translation timing
-- Literary / literal / faithful translation styles
-- `TRANSLATION_GLOSSARY.md` for consistent proper noun translation
-- Speech fingerprint preservation across languages
-
-### `/novel-style` — Style Configuration
-
-Sets genre, POV, tense, chapter word-count target, prose density, and optionally loads a custom style guide file.
-
-```
-/novel-style "fantasy-scifi, third-person limited, 8000 words per chapter"
-/novel-style "文风指导.md"  # load a custom style file
-```
-
-Produces `STYLE_SETTING.json` and `CHAPTER_TEMPLATE.md` (a structural template tailored to the genre).
-
-### `/novel-write` — Chapter Drafting Engine
-
-The core writing skill. Reads the outline, character bible, and style settings, then drafts chapters one by one with self-consistency checks.
-
-```
-/novel-write "ch01"           # Write one chapter
-/novel-write "ch03-ch05"      # Write a range
-/novel-write "all"            # Write all remaining chapters
-/novel-write "ch07 --restyle" # Rewrite with current style settings
-```
-
-**Per-chapter workflow**:
-
-1. Load outline beats, character profiles, and previous chapter's final scene
-2. Pre-writing analysis (scene goals, emotional arc, new characters)
-3. Draft prose following all style constraints
-4. Self-consistency check against CHARACTER_BIBLE
-5. Save primary language draft
-6. Translate (if bilingual + per-chapter mode), with glossary enforcement
-7. Update NOVEL_STATE.json
-
-### `/asset-map` — Image Filtering & Placement
-
-Processes raw images (e.g., extracted from a PDF outline) into an export-ready set with chapter placements. A four-phase pipeline:
-
-```
-/asset-map "all"         # Full pipeline: scan → filter → place
-/asset-map "scan-only"   # Phase 1-2: analyze and classify images
-/asset-map "filter-only" # Phase 3: apply selection rules
-/asset-map "place"       # Phase 4: insert into chapter markdown
-/asset-map "report"      # Show current status
-```
-
-**Filtering logic**: size-based pre-filter → visual classification (character / map / scene / diagram / icon) → duplicate detection → relevance cross-reference with chapter text → density cap (configurable per chapter). Requires user confirmation before inserting image references into chapter files.
-
-### `/novel-export` — Export to Final Formats
-
-Assembles all chapter files into a single document per language and converts to the requested output format(s) via pandoc.
-
-```
-/novel-export "epub docx"     # Default
-/novel-export "all"           # txt + docx + pdf + epub
-/novel-export "ch01-ch05 epub" # Partial export (preview)
-```
-
-**Auto-detects image assets**: if `novel/assets/` exists with images, the export skill automatically checks `IMAGE_MAP.json` and triggers `/asset-map` if images haven't been processed yet.
-
-**Format support**:
-
-| Format | Images   | Tool             |
-| ------ | -------- | ---------------- |
-| EPUB   | embedded | pandoc           |
-| DOCX   | embedded | pandoc           |
-| PDF    | embedded | pandoc + xelatex |
-| TXT    | stripped | pandoc / sed     |
-
-## Installation
-
-1. Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-2. Clone this repo into your project directory
-3. The `.claude/commands/` folder contains all skill definitions — Claude Code auto-discovers them as slash commands
-
-```bash
-git clone https://github.com/YOUR_USERNAME/claude-novel-pipeline.git my-novel-project
-cd my-novel-project
-claude  # start Claude Code
-```
-
-1. (Optional) Install [pandoc](https://pandoc.org/installing.html) for export — the pipeline will prompt you if it's missing
-
-### Dependencies
-
-| Tool        | Required for           | Install                                                              |
-| ----------- | ---------------------- | -------------------------------------------------------------------- |
-| Claude Code | Everything             | [docs.anthropic.com](https://docs.anthropic.com/en/docs/claude-code) |
-| pandoc      | Export (EPUB/DOCX/PDF) | `winget install JohnMacFarlane.Pandoc` / `brew install pandoc`       |
-| xelatex     | PDF export only        | TeX Live / MiKTeX                                                    |
-| pymupdf     | PDF image extraction   | `pip install pymupdf`                                                |
+---
 
 ## Quick Start
 
-```
-> /novel-writing-pipeline "my_story_outline.md -bilingual en->zh -genre: romance -chapter_words: 5000"
-```
-
-Or run each phase independently:
-
-```
-> /character-design "novel/OUTLINE.md"
-> /language-setting "en -> zh, literary, per-chapter"
-> /novel-style "romance, first-person, 5000 words"
-> /novel-write "all"
-> /novel-export "epub docx"
+```bash
+git clone https://github.com/user/claude-novel-pipeline.git my-novel
+cd my-novel
+claude --system-prompt-file ".claude/system-prompt.md"
 ```
 
-## Customization
-
-### Custom Style Guide
-
-Create a markdown file describing your desired prose style, then reference it:
+### Full Pipeline (one command)
 
 ```
-/novel-writing-pipeline "outline.md -custom_style_file: my_style.md"
+/novel-writing-pipeline "my_outline.pdf -genre: fantasy -chapter_words: 5000"
 ```
 
-The style file is loaded before every chapter and overrides the default genre style. It can describe sentence rhythm, dialogue conventions, emotional expression rules, narrative voice, forbidden vocabulary — anything you want the agent to internalize.
+### Step by Step
 
-See `examples/custom_style_guide_western_fantasy.md` for a complete example (medieval epic fantasy with cinematic narration, dialogue-driven pacing, and strict immersion rules).
+```
+/novel-outline "raw_outline.pdf 20章 每章5000字"        # Phase 0: Outline + Character Bible
+/language-setting "台词双语 中文写作 日语台词"             # Phase 1: Language mode
+/novel-style "literary, third-person limited, 5000字"    # Phase 2: Style config
+/novel-write "all"                                       # Phase 3: Draft all chapters
+/novel-export "epub"                                     # Phase 4: Export
+```
 
-### Translation Glossary
+### Novel Fusion (expand an existing novel)
 
-For bilingual projects, `novel/settings/TRANSLATION_GLOSSARY.md` is automatically maintained. Confirmed translations are enforced across all chapters (the "Banana Rule" — a proper noun always maps to exactly one translation). New terms discovered during writing are appended to a pending section for your review.
+```
+/novel-fusion "existing_novel.docx fusion_outline.md"    # Set up fusion structure
+/novel-write "all"                                       # Write new + modify chapters
+/novel-export "epub"
+```
 
-## Known Limitations & Honest Assessment
+---
 
-### Single-Agent Bottleneck
+## Per-Chapter Workflow
 
-The entire pipeline runs inside one Claude Code agent. This works, but has real consequences:
+Each chapter follows this exact sequence:
 
-- **Bilingual contamination**: When the same agent writes Japanese prose and then immediately translates to Chinese, linguistic interference can creep in — Japanese sentence structures leaking into the Chinese translation, or Chinese vocabulary choices being subconsciously biased by the Japanese source still in context. This is especially noticeable in long sessions where both languages share the context window for hours.
-- **Context window pressure**: By chapter 10+, the character bible, outline, style guide, glossary, and previous chapter all compete for context space. The agent manages this by loading only what's needed, but information can still be lost.
-- **Style drift**: Over many chapters, the prose style may gradually shift as earlier chapters fall out of the context window.
+| Step | Role | Action |
+|------|------|--------|
+| 1 | Editor | Read `NOVEL_STATE.json` + this chapter's outline section |
+| 2 | Editor | Check for new characters → add stubs to CHARACTER_BIBLE |
+| 3 | Editor | Fill `SUBAGENT_TEMPLATE.md` slots (chapter #, title, paths, SPECIAL_NOTES) |
+| 4 | Writer | *Subagent spawned* — reads all project files, thinks, writes chapter + notes to disk |
+| 5 | Editor | Read draft → invoke `/proof-reader` (6-category check) |
+| 6 | Editor | Fix HIGH/MEDIUM issues via Edit tool (no re-spawn) |
+| 7 | Editor | Persona fidelity check against `checklist.md` |
+| 8 | Editor | Update NOVEL_STATE, TIMELINE, CONTINUITY_MAP |
 
-### Multi-Agent Architecture (Not Implemented, But Possible)
+The writer subagent executes **9 internal steps** (defined in `SUBAGENT_TEMPLATE.md`): load identity → load settings → load memory → load context → structured thinking → write chapter → write notes → update memo → return lean message.
 
-A more robust architecture would split the work across specialized agents:
+---
 
-| Agent          | Role                                               | Why it helps                                                  |
-| -------------- | -------------------------------------------------- | ------------------------------------------------------------- |
-| **Writer**     | Draft chapters in the primary language only        | Stays immersed in one language's prose rhythm                 |
-| **Translator** | Translate finished chapters to the target language | No source-language contamination in context                   |
-| **Reviewer**   | Read the full draft and flag inconsistencies       | Fresh eyes, full-novel perspective (e.g., use Codex for this) |
-| **Editor**     | Apply style corrections across all chapters        | Consistent voice without context-window decay                 |
+## Skills Reference
 
-This is straightforward to implement — you can ask your own Claude Code agent to set up sub-agents, or use the [Claude Agent SDK](https://docs.anthropic.com/en/docs/claude-code/sdk) to orchestrate them programmatically. I chose not to build this because it would multiply token costs significantly, and for the kind of project I was working on (personal creative writing, not publication-grade output), the single-agent approach was the right tradeoff.
+| Skill | Purpose | Example |
+|-------|---------|---------|
+| `/novel-outline` | Raw source → structured OUTLINE.md + CHARACTER_BIBLE | `/novel-outline "concept.pdf 20章"` |
+| `/novel-writing-pipeline` | End-to-end orchestrator (drives all other skills) | `/novel-writing-pipeline "outline.pdf -genre: fantasy"` |
+| `/novel-write` | Write chapters (orchestrator + subagent + proof-reader) | `/novel-write "ch01"` / `"all"` / `"ch03-ch05"` |
+| `/proof-reader` | 6-category quality review | `/proof-reader "ch01"` / `"all"` |
+| `/character-design` | Create/update character profiles | `/character-design "add: rival in ch08"` |
+| `/language-setting` | Configure language mode | `/language-setting "台词双语 中文 日语"` |
+| `/novel-style` | Genre, POV, word count, prose style | `/novel-style "literary, 8000字"` |
+| `/novel-fusion` | Set up fusion mode (expand existing novel) | `/novel-fusion "source.docx outline.md"` |
+| `/asset-map` | Map images from source to chapters | `/asset-map "all"` |
+| `/novel-export` | Export to EPUB / DOCX / PDF / TXT | `/novel-export "epub docx"` |
+| `/proofread-translation` | Review translation quality | `/proofread-translation "ch01-ch05"` |
 
-### AI-Generated Fiction in General
+---
 
-Let's be honest: AI-generated novels, with current technology, are not ready for professional publication. What this pipeline produces is best described as a **high-quality first draft** — structurally coherent, character-consistent, and stylistically controlled, but still recognizably machine-written to a careful reader. The prose tends toward a certain uniformity of rhythm, the emotional beats can feel mechanically placed, and genuinely surprising creative choices are rare.
+## Writer Persona System
 
-This tool is best suited for:
+Each writer persona is a directory containing three files:
 
-- **Personal enjoyment** — turning your worldbuilding notes into a readable novel for yourself and friends
-- **Rapid prototyping** — generating a full draft to see if a story concept works before investing human writing time
-- **Fan fiction / derivative works** — like our Battle Spirits lore novelization, where the source material provides rich structure
-- **Learning** — studying how an AI interprets your outline can teach you about story structure
+```
+writer_persona/
+  Elie/                          ← persona name
+    persona.yaml                 ← identity: aesthetics, philosophy, speech patterns
+    checklist.md                 ← mechanical quality gates (checked after each chapter)
+    memo.md                      ← growing craft memory (subagent appends after each chapter)
+```
 
-If you want to push toward publication quality, the multi-agent review architecture described above would help — but ultimately, a human editor remains essential.
+### How It Works
+
+1. The subagent reads `persona.yaml` **before anything else** (Step Zero in the template)
+2. All output — prose, thinking, notes, messages — must sound like that persona
+3. After writing, the subagent appends craft insights to `memo.md`
+4. `memo.md` has a 200-line working cap; old entries get compressed into `# Archive`
+5. On the final chapter, a completion summary is written to the Archive section
+
+### Creating a Custom Persona
+
+Copy the `Elie/` directory and modify the YAML. Key fields:
+
+```yaml
+name: "Your Writer Name"
+aesthetics:
+  prose_density: "rich" | "spare" | "balanced"
+  favorite_techniques: [...]
+  avoidance_list: [...]
+personality:
+  voice: "first-person description of how they think and speak"
+  opinions: [...]
+```
+
+Point your project to it via `{project}/settings/active_writer.json`:
+
+```json
+{ "writer_dir": "writer_persona/YourWriter" }
+```
+
+---
+
+## Language Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Monolingual** | Everything in one language | Standard novels |
+| **Bilingual** | Full parallel translation per chapter | Published bilingual editions |
+| **Dialogue-bilingual** | Prose in language A, dialogue in language B with inline translation | Authenticity — e.g., Japanese dialogue in Chinese narration |
+
+### Dialogue-Bilingual Format
+
+```
+她转过身，背对着窗户站了一会儿。
+
+「……言わなきゃいけないことがある」
+（……有些事必须说。）
+
+她的声音很轻，像是怕把什么东西震碎。
+```
+
+- Original dialogue uses configured brackets (default: `「」`)
+- Translation follows immediately on next line (default: `（）`)
+- Narration is exclusively in the writing language
+- Every dialogue line must have both versions — the proof-reader counts and verifies
+
+---
+
+## Novel Fusion Mode
+
+Expand an existing novel by inserting new chapters and modifying existing ones.
+
+### Three Chapter Types
+
+| Type | Action | Writer Task |
+|------|--------|-------------|
+| **passthrough** | Copy source chapter as-is | None (glossary check only) |
+| **modify** | Rewrite with specific changes woven in | Match source author's voice, not persona's |
+| **new** | Original content between source chapters | Full creative writing with continuity anchors |
+
+### Setup
+
+```
+/novel-fusion "original_novel.docx fusion_outline.md"
+```
+
+This creates:
+- `source/chNN_source.md` — extracted source chapters
+- `source/SOURCE_INDEX.md` — chapter type mapping
+- `NOVEL_STATE.json` with `"mode": "fusion"`
+- Annotated `OUTLINE.md` with TYPE markers per chapter
+
+Then `/novel-write "all"` handles routing automatically: passthrough chapters are copied, modify chapters get change instructions, new chapters get full creative briefs.
+
+---
+
+## Quality System
+
+### Proof-Reader: 6 Categories
+
+| # | Category | What It Checks |
+|---|----------|----------------|
+| 1 | **Character Consistency** | Speech fingerprints, identity anchors, knowledge state, relationships |
+| 2 | **Timeline** | Event order, location continuity, story-day tracking |
+| 3 | **Language Quality** | Repetition, awkward phrasing, prose rhythm, style compliance |
+| 4 | **Language Contamination** | Grammar leakage between languages, translationese |
+| 5 | **Dialogue Format** | Bilingual pairs complete, correct brackets, format consistency |
+| 6 | **Glossary Alignment** | Proper noun consistency (the Banana Rule: registered = non-negotiable) |
+
+### Hard Constraints (enforced per chapter)
+
+| Constraint | Limit | Purpose |
+|-----------|-------|---------|
+| "不是X是Y" pattern | ≤ 2 | Prevents formulaic contrast structures |
+| Em-dash (——) | ≤ 30 | Prevents dash overuse |
+| "有什么东西" | ≤ 1 | Vague filler phrase |
+| Metaphor density | ≤ 2 per 1000 chars | Prevents purple prose |
+| AI boilerplate | 0 | Banned phrase patterns (e.g., "不由得感到一阵") |
+| Quantified perception | 0 | No "temperature rose 0.3°" (characters aren't instruments) |
+| Meta-leakage | 0 | No `chNN`, `Beat N` in prose text |
+
+### Verdicts
+
+| Verdict | Condition | Action |
+|---------|-----------|--------|
+| **PASS** | 0 HIGH, ≤2 MEDIUM | Save and proceed |
+| **PASS_WITH_NOTES** | 0 HIGH, >2 MEDIUM | Save; optionally fix MEDIUMs |
+| **NEEDS_REVISION** | ≥1 HIGH | Editor fixes via Edit tool, then re-reviews (max 2 cycles) |
+
+### Persona Fidelity Check
+
+After the mechanical proof-reader pass, the editor evaluates the draft against `checklist.md`:
+- ≥3 items failed → HIGH severity (draft sounds generic)
+- 1–2 items failed → MEDIUM (note and optionally fix)
+- 0 items failed → persona confirmed
+
+---
+
+## State Files
+
+The pipeline tracks three complementary files:
+
+| File | Tracks | Updated By |
+|------|--------|------------|
+| `NOVEL_STATE.json` | Pipeline progress, chapter status, proof-reader results | Editor |
+| `TIMELINE.md` | **Events** — what happened when (chronological log) | Editor |
+| `CONTINUITY_MAP.md` | **States** — who/what/where at each chapter boundary | Editor |
+
+All three are updated after each chapter. The writer subagent reads them for context but never modifies them.
+
+---
 
 ## Project Structure
 
 ```
 claude-novel-pipeline/
   .claude/
+    system-prompt.md                ← Novel editor identity
+    SUBAGENT_TEMPLATE.md            ← Writer subagent prompt (load-instructions pattern)
     commands/
-      novel-writing-pipeline.md   # Orchestrator
-      character-design.md         # Character bible generator
-      language-setting.md         # Language configuration
-      novel-style.md              # Style configuration
-      novel-write.md              # Chapter drafting engine
-      asset-map.md                # Image filtering & placement
-      novel-export.md             # Export to EPUB/DOCX/PDF/TXT
+      novel-writing-pipeline.md     ← End-to-end orchestrator
+      novel-outline.md              ← Outline structuring
+      character-design.md           ← Character bible generator
+      language-setting.md           ← Language mode (3 modes)
+      novel-style.md                ← Style configuration
+      novel-write.md                ← Chapter drafting engine
+      novel-fusion.md               ← Novel expansion
+      proof-reader.md               ← 6-category quality review
+      asset-map.md                  ← Image mapping
+      novel-export.md               ← Export (EPUB/DOCX/PDF/TXT)
+      proofread-translation.md      ← Translation review
+  writer_persona/
+    Elie/                           ← Default writer persona
+      persona.yaml
+      checklist.md
+      memo.md
   examples/
-    STYLE_SETTING.json                        # Example style config
-    LANGUAGE_SETTING.json                     # Example bilingual config
-    CHAPTER_TEMPLATE.md                       # Example chapter template (fantasy-scifi)
-    custom_style_guide_western_fantasy.md     # Example custom style guide
+    active-project.json
+    STYLE_SETTING.json
+    LANGUAGE_SETTING.json
+    LANGUAGE_SETTING_dialogue_bilingual.json
+    custom_style_guide_western_fantasy.md
+  CLAUDE.md                         ← Claude Code project instructions
+  start-novel.ps1                   ← Windows launcher
   README.md
+  README_CN.md
   LICENSE
+
+{project}/                          ← Created per novel (gitignored)
+  OUTLINE.md
+  NOVEL_STATE.json
+  characters/CHARACTER_BIBLE.md
+  settings/
+    LANGUAGE_SETTING.json
+    STYLE_SETTING.json
+    TRANSLATION_GLOSSARY.md
+    TIMELINE.md
+    CONTINUITY_MAP.md
+    active_writer.json
+  source/                           ← Fusion mode only
+  draft/chNN.md
+  assets/IMAGE_MAP.json
+  output/
 ```
+
+---
+
+## Installation
+
+### Requirements
+
+| Tool | Required For | Install |
+|------|-------------|---------|
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Everything | See Anthropic docs |
+| Python 3 + ebooklib + Pillow | EPUB export with images | `pip install ebooklib Pillow` |
+| pandoc | DOCX/PDF export | `winget install JohnMacFarlane.Pandoc` / `brew install pandoc` |
+| xelatex | PDF export (CJK fonts) | TeX Live / MiKTeX |
+
+### Setup
+
+```bash
+git clone https://github.com/user/claude-novel-pipeline.git my-novel
+cd my-novel
+
+# Option A: Standard launch
+claude
+
+# Option B: With custom system prompt (recommended)
+claude --system-prompt-file ".claude/system-prompt.md"
+
+# Option C: Windows PowerShell
+.\start-novel.ps1
+```
+
+Claude Code auto-discovers `.claude/commands/*.md` as slash commands. No further configuration needed.
+
+### Multi-Project Support
+
+Each novel lives in its own directory. Configure `.claude/active-project.json`:
+
+```json
+{
+  "project_dir": "my-first-novel",
+  "project_name": "The Title"
+}
+```
+
+---
+
+## Lessons from Production
+
+These observations come from writing a 33-chapter novel (250K+ characters) through the full pipeline:
+
+1. **The writer's self-checks are unreliable.** Subagents consistently undercount dashes and overcount compliance. The editor must run independent grep verification every chapter. This is by design — the proof-reader exists for this reason.
+
+2. **Metaphor density is the hardest constraint to hold.** Writers (human and AI) naturally reach for comparison. The fix: cut the weakest metaphor in each paragraph, keeping only the one that would leave a hole if removed.
+
+3. **Modify chapters require a different skill.** In fusion mode, "modify" chapters must match the source author's voice, not the persona's. The best modification is invisible — readers shouldn't notice someone touched it.
+
+4. **Don't re-spawn subagents for revision.** It wastes a full context load. The editor fixes proof-reader issues directly via Edit tool — faster and more precise.
+
+5. **The memo is the persona's growth record.** Over 33 chapters, the writer persona develops genuine craft insights through practice. The memo should be treated as valuable institutional knowledge, not disposable notes.
+
+---
+
+## Inspiration
+
+Inspired by [wanshuiyin/Auto-claude-code-research-in-sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep) and conversations in the SillyTavern community about creative applications of Claude Code.
 
 ## License
 

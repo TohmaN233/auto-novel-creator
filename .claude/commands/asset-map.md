@@ -9,29 +9,33 @@ allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob
 
 Process scope: **$ARGUMENTS**
 
+## Project Resolution
+
+Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
+
 ## Overview
 
-This skill takes the raw images extracted from the PDF outline (`novel/assets/`) and produces an export-ready image set with chapter placements. It is a **pre-processing step** before `/novel-export`.
+This skill takes the raw images extracted from the PDF outline (`{project}/assets/`) and produces an export-ready image set with chapter placements. It is a **pre-processing step** before `/novel-export`.
 
 ```
-novel/assets/               → 309 raw images (all from PDF)
+{project}/assets/               → 309 raw images (all from PDF)
         ↓  Phase 1: Visual Scan
         ↓  Phase 2: Cross-Reference with Outline
         ↓  Phase 3: Filter (keep only novel-worthy images)
         ↓  Phase 4: Chapter Placement
-novel/assets/export/         → Curated images with chapter assignments
-novel/assets/IMAGE_MAP.json  → Updated with chapter, position, caption, status
-novel/draft/[lang]/ch*.md    → ![caption](path) references inserted
+{project}/assets/export/         → Curated images with chapter assignments
+{project}/assets/IMAGE_MAP.json  → Updated with chapter, position, caption, status
+{project}/draft/[lang]/ch*.md    → ![caption](path) references inserted
 ```
 
 ## Prerequisites
 
 Required files:
 
-- `novel/assets/IMAGE_MAP.json` — image inventory from PDF extraction
-- `novel/assets/*.jpeg|*.png` — extracted images
-- `novel/OUTLINE.md` — source outline with `<!-- Page N -->` markers
-- `novel/draft/[lang]/ch*.md` — chapter files (needed for Phase 4 placement)
+- `{project}/assets/IMAGE_MAP.json` — image inventory from PDF extraction
+- `{project}/assets/*.jpeg|*.png` — extracted images
+- `{project}/OUTLINE.md` — source outline with `<!-- Page N -->` markers
+- `{project}/draft/[lang]/ch*.md` — chapter files (needed for Phase 4 placement)
 
 ## Argument Parsing
 
@@ -47,11 +51,11 @@ Required files:
 
 ## State Persistence
 
-All state lives in `novel/assets/IMAGE_MAP.json`. Each image entry:
+All state lives in `{project}/assets/IMAGE_MAP.json`. Each image entry:
 
 ```json
 {
-  "file": "novel/assets/outline_p032_img01.png",
+  "file": "{project}/assets/outline_p032_img01.png",
   "source_page": 32,
   "size_kb": 45.2,
   "chapter": "ch05",
@@ -97,7 +101,7 @@ Analyze each image to determine its content and type.
 ```python
 import json, pathlib
 
-with open("novel/assets/IMAGE_MAP.json", "r", encoding="utf-8") as f:
+with open("{project}/assets/IMAGE_MAP.json", "r", encoding="utf-8") as f:
     images = json.load(f)
 
 # Size-based triage
@@ -115,7 +119,7 @@ for img in images:
         img["status"] = "unscanned"
 
 # Save
-with open("novel/assets/IMAGE_MAP.json", "w", encoding="utf-8") as f:
+with open("{project}/assets/IMAGE_MAP.json", "w", encoding="utf-8") as f:
     json.dump(images, f, ensure_ascii=False, indent=2)
 ```
 
@@ -157,7 +161,7 @@ For each scanned image, find the corresponding outline text using the `source_pa
 ```python
 import re
 
-with open("novel/OUTLINE.md", "r", encoding="utf-8") as f:
+with open("{project}/OUTLINE.md", "r", encoding="utf-8") as f:
     outline_text = f.read()
 
 # Split outline by page markers
@@ -179,7 +183,7 @@ For each image:
 
 Build a page→chapter lookup table from the outline:
 
-1. Read `novel/OUTLINE.md`
+1. Read `{project}/OUTLINE.md`
 2. Find chapter boundaries (look for chapter header patterns: `第N章`, `Chapter N`, `第一章`, etc.)
 3. Record which page range each chapter covers
 4. For each image, assign `chapter` based on its `source_page`
@@ -293,18 +297,18 @@ For each selected image:
 #### Step 4b: Copy to export folder
 
 ```bash
-mkdir -p novel/assets/export
+mkdir -p {project}/assets/export
 ```
 
-Copy selected images to `novel/assets/export/` with clean filenames:
+Copy selected images to `{project}/assets/export/` with clean filenames:
 
 ```python
 import shutil, json, pathlib
 
-with open("novel/assets/IMAGE_MAP.json", "r", encoding="utf-8") as f:
+with open("{project}/assets/IMAGE_MAP.json", "r", encoding="utf-8") as f:
     images = json.load(f)
 
-export_dir = pathlib.Path("novel/assets/export")
+export_dir = pathlib.Path("{project}/assets/export")
 export_dir.mkdir(parents=True, exist_ok=True)
 
 counter = {}
@@ -319,10 +323,10 @@ for img in images:
     src = pathlib.Path(img["file"])
     dst = export_dir / new_name
     shutil.copy2(src, dst)
-    img["export_file"] = f"novel/assets/export/{new_name}"
+    img["export_file"] = f"{project}/assets/export/{new_name}"
     print(f"  {src.name} → {new_name}")
 
-with open("novel/assets/IMAGE_MAP.json", "w", encoding="utf-8") as f:
+with open("{project}/assets/IMAGE_MAP.json", "w", encoding="utf-8") as f:
     json.dump(images, f, ensure_ascii=False, indent=2)
 ```
 
@@ -336,13 +340,13 @@ For each language version of each chapter:
 4. Save the file
 
 ```markdown
-![オッザニア — 龍人の戦士](novel/assets/export/ch01_img01.jpeg)
+![オッザニア — 龍人の戦士]({project}/assets/export/ch01_img01.jpeg)
 ```
 
 **Path handling:**
 
-- For chapter files in `novel/draft/ja/ch01_ja.md`, the image reference path should be relative or absolute depending on pandoc setup
-- Use the path format that `novel-export` expects: `novel/assets/export/chNN_imgNN.ext`
+- For chapter files in `{project}/draft/ja/ch01_ja.md`, the image reference path should be relative or absolute depending on pandoc setup
+- Use the path format that `novel-export` expects: `{project}/assets/export/chNN_imgNN.ext`
 
 **Insert both language versions** — the same image goes into both `ja` and `zh` chapter files, but captions are language-specific:
 
@@ -354,10 +358,10 @@ For each language version of each chapter:
 ```json
 {
   "status": "placed",
-  "export_file": "novel/assets/export/ch05_img01.jpeg",
+  "export_file": "{project}/assets/export/ch05_img01.jpeg",
   "inserted_at": {
-    "ja": {"file": "novel/draft/ja/ch05_ja.md", "line": 42},
-    "zh": {"file": "novel/draft/zh/ch05_zh.md", "line": 44}
+    "ja": {"file": "{project}/draft/ja/ch05_ja.md", "line": 42},
+    "zh": {"file": "{project}/draft/zh/ch05_zh.md", "line": 44}
   }
 }
 ```
@@ -372,7 +376,7 @@ Selected for export: [N]
 Rejected: [N]
 Placed in chapters: [N]
 
-Export folder: novel/assets/export/ ([N] files, [total_size] MB)
+Export folder: {project}/assets/export/ ([N] files, [total_size] MB)
 
 By chapter:
 | Chapter | Images | Types            | Status |
@@ -382,10 +386,10 @@ By chapter:
 | ...     |        |                  |        |
 
 Files modified:
-- novel/assets/IMAGE_MAP.json (updated)
-- novel/assets/export/ ([N] images)
-- novel/draft/ja/ch*.md ([N] image references inserted)
-- novel/draft/zh/ch*.md ([N] image references inserted)
+- {project}/assets/IMAGE_MAP.json (updated)
+- {project}/assets/export/ ([N] images)
+- {project}/draft/ja/ch*.md ([N] image references inserted)
+- {project}/draft/zh/ch*.md ([N] image references inserted)
 
 Ready for: /novel-export "epub docx"
 ```
@@ -403,13 +407,13 @@ When called with a chapter range (e.g., `ch05-ch08`):
 When called with `reset`:
 
 1. Remove all `chapter`, `type`, `status`, `scan_notes` fields from IMAGE_MAP.json
-2. Delete `novel/assets/export/` directory
-3. Remove all `![...](novel/assets/export/...)` lines from chapter files
+2. Delete `{project}/assets/export/` directory
+3. Remove all `![...]({project}/assets/export/...)` lines from chapter files
 4. Report: "Asset mappings reset. Run `/asset-map all` to start fresh."
 
 ## Key Rules
 
-- **Never delete original images** in `novel/assets/`. The export folder is a copy.
+- **Never delete original images** in `{project}/assets/`. The export folder is a copy.
 - **Image density**: 1-10 images per chapter is ideal. More than 10 per chapter degrades reading flow.
 - **Large file handling**: if IMAGE_MAP.json exceeds Write limits, use Bash heredoc.
 - **Idempotent**: running the skill twice should not create duplicate image references in chapters. Check before inserting.

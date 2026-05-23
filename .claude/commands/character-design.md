@@ -9,6 +9,10 @@ allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob
 
 Design characters for: **$ARGUMENTS**
 
+## Project Resolution
+
+Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
+
 ## Overview
 
 This skill reads a story outline and produces a structured `CHARACTER_BIBLE.md` — the single source of truth for every named character in the novel. All later writing phases read this file to ensure consistency.
@@ -17,9 +21,9 @@ The character bible is a living document: new characters are added as they appea
 
 ## Inputs
 
-1. **`novel/OUTLINE.md`** — story outline (preferred source)
+1. **`{project}/OUTLINE.md`** — story outline (preferred source)
 2. **`$ARGUMENTS`** — outline text pasted inline, or path to a different outline file (`.md`, `.txt`, `.pdf`)
-3. **`novel/characters/CHARACTER_BIBLE.md`** — existing bible (if updating, not starting fresh)
+3. **`{project}/characters/CHARACTER_BIBLE.md`** — existing bible (if updating, not starting fresh)
 
 If no outline is found, ask: "Please provide a story outline (file path or paste the text)."
 
@@ -52,7 +56,7 @@ Merge all extracted content before proceeding to Step 1.
 
 ## State Check
 
-Before starting, check if `novel/characters/CHARACTER_BIBLE.md` already exists:
+Before starting, check if `{project}/characters/CHARACTER_BIBLE.md` already exists:
 
 - If absent → **fresh design** (Step 1 → Step 5)
 - If present and `$ARGUMENTS` mentions a character name or "add" → **add/update mode** (jump to Step 4)
@@ -60,8 +64,8 @@ Before starting, check if `novel/characters/CHARACTER_BIBLE.md` already exists:
 
 Archive command:
 ```bash
-cp novel/characters/CHARACTER_BIBLE.md \
-   "novel/characters/CHARACTER_BIBLE_$(date +%Y%m%d_%H%M%S).md"
+cp {project}/characters/CHARACTER_BIBLE.md \
+   "{project}/characters/CHARACTER_BIBLE_$(date +%Y%m%d_%H%M%S).md"
 ```
 
 ## Workflow
@@ -227,8 +231,8 @@ Example:
 Save with versioning:
 ```bash
 # Write timestamped version first
-cp novel/characters/CHARACTER_BIBLE.md \
-   "novel/characters/CHARACTER_BIBLE_$(date +%Y%m%d_%H%M%S).md" 2>/dev/null || true
+cp {project}/characters/CHARACTER_BIBLE.md \
+   "{project}/characters/CHARACTER_BIBLE_$(date +%Y%m%d_%H%M%S).md" 2>/dev/null || true
 # Then write the current version
 ```
 
@@ -251,7 +255,7 @@ Potential consistency watch-points:
 - [Any characters with similar names that could be confused]
 - [Characters with complex role shifts across the story]
 
-Output: novel/characters/CHARACTER_BIBLE.md
+Output: {project}/characters/CHARACTER_BIBLE.md
 
 Next steps:
 - /novel-style   → configure writing style and chapter length
@@ -261,7 +265,7 @@ Next steps:
 
 ## Consistency Rules
 
-Apply the following character consistency schema to every profile:
+Read `../shared-references/character-consistency.md` before writing any character profile. Apply the character schema exactly as specified there.
 
 ## Key Rules
 

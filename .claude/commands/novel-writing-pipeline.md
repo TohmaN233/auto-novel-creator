@@ -1,7 +1,7 @@
 ---
 name: novel-writing-pipeline
-description: "Full novel-writing pipeline: outline → character design → style/language config → chapter drafting → export. Orchestrates /character-design, /language-setting, /novel-style, /novel-write, and /novel-export into a single end-to-end workflow. Use when user says \"写小说\", \"novel pipeline\", \"小说全流程\", \"帮我写本小说\", \"end-to-end novel\", or wants to go from an outline to a finished document."
-argument-hint: [outline-file-or-description — optional: language, style, output-format]
+description: "Full novel-writing pipeline: outline → language/style config → chapter drafting → export. Also supports fusion mode (expand an existing novel). Orchestrates /novel-outline, /novel-fusion, /language-setting, /novel-style, /novel-write, and /novel-export. Use when user says \"写小说\", \"novel pipeline\", \"小说全流程\", \"帮我写本小说\", \"end-to-end novel\", \"融合写作\", \"扩写小说\", or wants to go from an outline to a finished document."
+argument-hint: [outline-file-or-description — optional: language, style, output-format, fusion-source]
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, Skill
 ---
 
@@ -9,43 +9,75 @@ allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, Skill
 
 Full novel pipeline for: **$ARGUMENTS**
 
+## Project Resolution
+
+Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
+
 ## Constants
 
 - **AUTO_PROCEED = false** — When `true`, automatically moves through Phase 1–3 (configuration) without waiting for confirmation. When `false` (default), pauses at each gate for user approval. Recommended: keep `false` for first-time runs so you can review the character bible and style settings before writing begins.
-- **LANGUAGE_MODE = "monolingual"** — `monolingual` (default) or `bilingual`. Override: `bilingual: true` or specify two languages (e.g., `中英双语`).
+- **PIPELINE_MODE = "standard"** — `standard` (outline → write) or `fusion` (source novel + fusion outline → fused write). Auto-detected from arguments: if a source novel file is provided alongside an outline, mode is `fusion`. Override: `fusion`, `融合`, `扩写`.
+- **FUSION_SOURCE = null** — Path to the existing novel for fusion mode. Detected from arguments (e.g., `source:novel.docx`, or a `.docx`/`.txt` file when fusion keywords are present).
+- **LANGUAGE_MODE = "monolingual"** — `monolingual`, `bilingual`, or `dialogue-bilingual`. Override: `bilingual: true`, `dialogue-bilingual: true`, `台词双语`, or specify two languages (e.g., `中英双语`, `台词日语`).
 - **PRIMARY_LANGUAGE = "zh"** — Language the novel is written in. Detected from arguments or outline language. Default: Chinese (`zh`).
 - **SECONDARY_LANGUAGE = "en"** — Secondary language for bilingual mode. Default: English (`en`). Only used when `LANGUAGE_MODE = bilingual`.
 - **GENRE = "auto"** — Genre/style. Auto-detected from outline if not specified. Override: `genre: romance / thriller / fantasy / literary / light`.
-- **CHAPTER_WORD_COUNT = 3000** — Target words per chapter. Override: `每章N字` or `N words per chapter`.
+- **CHAPTER_WORD_COUNT = 8000** — Target words per chapter. Override: `每章N字` or `N words per chapter`.
 - **OUTPUT_FORMAT = "epub docx"** — Output formats. Options: `txt`, `docx`, `pdf`, `epub`, `all`. Default: epub + docx.
 - **AUTO_EXPORT = false** — When `true`, automatically exports after all chapters are written. When `false` (default), user calls `/novel-export` manually.
 - **CHAPTER_RANGE = "all"** — Which chapters to write in the writing phase. Default: all chapters from the outline.
+- **WRITER_PERSONA = null** — Writer persona name. If specified, looks for `writer_persona/{name}.yaml`. If null, uses the first `.yaml` alphabetically.
 
 > Override any constant via argument: `/novel-writing-pipeline "outline.md — bilingual: zh/en, genre: romance, 每章3000字, output: epub pdf, auto_proceed: true"`
 
 ## Overview
 
-This pipeline chains five sub-skills into a single novel-writing lifecycle:
+This pipeline supports two modes:
 
+### Standard Mode
 ```
-/character-design  →  /language-setting  →  /novel-style  →  /novel-write  →  /novel-export
-     (Phase 1)             (Phase 2)            (Phase 3)        (Phase 4)       (Phase 5)
-  Character Bible       Language Config       Style Config     Chapter Drafts   Final Output
+/novel-outline  →  /language-setting  →  /novel-style  →  /novel-write  →  /novel-export
+   (Phase 1)           (Phase 2)           (Phase 3)        (Phase 4)       (Phase 5)
+ Structured Outline   Language Config     Style Config    Chapter Drafts   Final Output
+ + CHARACTER_BIBLE
 ```
 
-**Persistent memory files** (live in `novel/` throughout the pipeline):
-- `novel/OUTLINE.md` — story structure (input, never modified)
-- `novel/characters/CHARACTER_BIBLE.md` — living character reference (grows during writing)
-- `novel/settings/LANGUAGE_SETTING.json` — language configuration
-- `novel/settings/STYLE_SETTING.json` — style configuration
-- `novel/draft/` — chapter files (primary language)
-- `novel/draft/[lang-code]/` — chapter files by language (bilingual)
-- `novel/NOVEL_STATE.json` — pipeline progress state
-- `novel/output/` — final exported files
+### Fusion Mode
+```
+/novel-fusion   →  /language-setting  →  /novel-style  →  /novel-write  →  /novel-export
+   (Phase 1F)          (Phase 2)           (Phase 3)        (Phase 4)       (Phase 5)
+ Source Novel +       Language Config     Style Config    Chapter Drafts   Final Output
+ Fusion Outline →                                       (passthrough/new/modify)
+ Fused OUTLINE.md
+ + CHARACTER_BIBLE
+ + CONTINUITY_MAP
+```
+
+**Phase 1 (standard)** — `/novel-outline` converts raw source material (PDF, text, notes) into a structured `OUTLINE.md` with per-chapter beats, character lists, and emotional arcs. Also creates `CHARACTER_BIBLE.md` if absent. Both can be skipped if the user provides them pre-made.
+
+**Phase 1F (fusion)** — `/novel-fusion` reads an existing novel + a fusion outline, splits the source into chapters, and generates a fused `OUTLINE.md` with three chapter types (passthrough/modify/new), plus `CHARACTER_BIBLE.md`, `SOURCE_INDEX.md`, and `CONTINUITY_MAP.md`.
+
+**Phase 4 architecture** — `/novel-write` uses a three-role pattern:
+- Main agent: orchestrator (context loading, brief assembly, quality control)
+- Writing subagent: prose generation (delegated via Agent tool)
+- Proof-reader: structured review (character consistency, timeline, language quality, contamination, glossary)
+
+This separation ensures the creative pass and the critical pass have independent context, reducing blind-spot errors.
+
+**Persistent memory files** (live in `{project}/` throughout the pipeline):
+- `{project}/OUTLINE_RAW.md` — original source text (reference, never modified)
+- `{project}/OUTLINE.md` — structured writing outline with per-chapter beats (generated by `/novel-outline`)
+- `{project}/characters/CHARACTER_BIBLE.md` — living character reference (grows during writing)
+- `{project}/settings/LANGUAGE_SETTING.json` — language configuration
+- `{project}/settings/STYLE_SETTING.json` — style configuration
+- `{project}/draft/` — chapter files (primary language)
+- `{project}/draft/[lang-code]/` — chapter files by language (bilingual)
+- `{project}/NOVEL_STATE.json` — pipeline progress state
+- `{project}/output/` — final exported files
 
 ## State Persistence
 
-Persist pipeline state to `novel/NOVEL_STATE.json` after each phase:
+Persist pipeline state to `{project}/NOVEL_STATE.json` after each phase:
 
 ```json
 {
@@ -56,7 +88,7 @@ Persist pipeline state to `novel/NOVEL_STATE.json` after each phase:
   "primary_language": "zh",
   "secondary_language": "en",
   "genre": "romance",
-  "chapter_word_count": 3000,
+  "chapter_word_count": 8000,
   "output_format": ["epub", "docx"],
   "total_chapters": 20,
   "chapters_written": 0,
@@ -76,122 +108,86 @@ On invocation, check this file:
 
 Parse `$ARGUMENTS` to extract:
 
-1. **Outline source** — detect a file path (`.md`, `.txt`) or inline text
-2. **Language settings** — detect bilingual/monolingual, primary/secondary languages
-3. **Genre/style hints** — extract if mentioned
-4. **Chapter word count** — extract if specified
-5. **Output format** — extract if specified
-6. **Constant overrides** — update constants accordingly
+1. **Pipeline mode detection** — check for fusion signals:
+   - Keywords: `fusion`, `融合`, `扩写`, `补写`, `expand`, `insert chapters`
+   - Two file paths where one is labeled as source novel: `source:novel.docx`, `源小说:xxx`
+   - Explicit `FUSION_SOURCE` path
+   - If detected → set `PIPELINE_MODE = "fusion"`, extract `FUSION_SOURCE` path
+2. **Outline source** — detect a file path (`.pdf`, `.md`, `.txt`, `.docx`) or inline text
+   - In fusion mode: this is the **fusion outline** (what to add/change), not the source novel
+3. **Chapter count** — detect from `chapters:N`, `N章`, or auto-detect
+4. **Chapter word count** — detect from `每章N字`, `words:N`, or use CHAPTER_WORD_COUNT constant
+5. **Language settings** — detect bilingual/monolingual/dialogue-bilingual
+6. **Genre/style hints** — extract if mentioned
+7. **Output format** — extract if specified
+8. **Writer persona** — detect from `persona:name`, `人格:name`, `writer:name`
+9. **Constant overrides** — update constants accordingly
 
 **Initialize project directory:**
 
 ```bash
-mkdir -p novel/characters
-mkdir -p novel/settings
-mkdir -p novel/draft
-mkdir -p novel/output
-mkdir -p novel/assets
+mkdir -p {project}/characters
+mkdir -p {project}/settings
+mkdir -p {project}/draft
+mkdir -p {project}/output
+mkdir -p {project}/assets
 ```
 
-**Save the outline:**
-
-If the outline was provided inline (not a file path), write it to `novel/OUTLINE.md`.
-If it was provided as a file path, copy to `novel/OUTLINE.md` (keep the original).
-If no outline provided: ask immediately. Do not proceed without an outline.
-
+If no outline source provided: ask immediately.
 ```
-No outline provided. Please share the story outline (paste text, or provide a file path).
+No outline provided. Please share the story outline (paste text, file path, or PDF).
 ```
-
-**Extract images from PDF outline (if applicable):**
-
-If the outline source is a `.pdf` file, run the image extraction step before proceeding:
-
-```python
-# Requires: pip install pymupdf
-import fitz, json, pathlib
-
-pdf_path = "XXX.pdf"   # replace with actual path
-assets = pathlib.Path("novel/assets")
-assets.mkdir(parents=True, exist_ok=True)
-
-doc = fitz.open(pdf_path)
-image_map = []   # will be saved as IMAGE_MAP.json
-
-for page_num in range(len(doc)):
-    page = doc[page_num]
-    images = page.get_images(full=True)
-    for img_idx, img in enumerate(images):
-        xref = img[0]
-        base_img = doc.extract_image(xref)
-        img_ext = base_img["ext"]            # png, jpeg, etc.
-        img_data = base_img["image"]
-        filename = f"outline_p{page_num+1:02d}_img{img_idx+1:02d}.{img_ext}"
-        out_path = assets / filename
-        out_path.write_bytes(img_data)
-        image_map.append({
-            "file": f"novel/assets/{filename}",
-            "source_page": page_num + 1,
-            "chapter": None,        # to be filled by user or inferred from outline
-            "position": "after_scene_break",  # default placement
-            "caption": ""           # optional caption
-        })
-
-(assets / "IMAGE_MAP.json").write_text(
-    json.dumps(image_map, ensure_ascii=False, indent=2), encoding="utf-8"
-)
-print(f"Extracted {len(image_map)} images → novel/assets/IMAGE_MAP.json")
-```
-
-**Fallback if pymupdf is not available:**
-```bash
-# pdfimages (poppler-utils) — saves as PPM/PNG
-pdfimages -png XXX.pdf novel/assets/outline
-# Then manually rename: outline-000.png → outline_p01_img01.png
-```
-
-**After extraction**, read each extracted image visually (the Read tool supports image files) and:
-1. Describe the image content in one line
-2. Infer which chapter it most likely belongs to based on the outline context
-3. Fill in `"chapter": "ch01"` and `"caption": "[description]"` in `IMAGE_MAP.json`
-
-Present to the user for confirmation:
-
-```
-Extracted [N] images from outline PDF.
-
-IMAGE_MAP.json preview:
-- outline_p03_img01.png → Ch01 "地图：星语之塔位置图" [地图]
-- outline_p07_img01.png → Ch03 "艾莲娜·瓦恩 人物立绘" [人物图]
-- outline_p12_img01.png → Ch07 "虚构粒子结构示意图" [设定图]
-
-Confirm chapter assignments? (or adjust before writing begins)
-```
-
-If the user adjusts assignments, update `IMAGE_MAP.json` accordingly.
-
-**Note:** TXT export ignores images entirely. Images are only embedded in DOCX, PDF, and EPUB outputs (handled in `/novel-export`).
 
 **Present pipeline overview:**
 
+**Standard mode:**
 ```
 Novel Writing Pipeline initialized.
 
-Outline: novel/OUTLINE.md ([N] chapters detected)
-Title: [detected title or "Untitled"]
+Source: [file or "inline text"]
+Title: [detected title or "to be determined"]
 
 Pipeline configuration:
-- Language: [Monolingual zh / Bilingual zh→en]
+- Mode: Standard (new novel from outline)
+- Chapters: [N or "auto-detect"]
+- Words/chapter: [N] 字 target
+- Language: [Monolingual zh / Bilingual zh→en / Dialogue-bilingual zh+ja]
 - Genre: [detected or "to be configured"]
-- Chapter length: [N] 字 target
+- Writer persona: [name or "default (first .yaml)"]
 - Output: [formats]
 
 Phases:
-1. Character Design   → CHARACTER_BIBLE.md
-2. Language Setting   → LANGUAGE_SETTING.json
-3. Style Config       → STYLE_SETTING.json
-4. Chapter Writing    → novel/draft/ ([N] chapters)
-5. Export             → novel/output/ ([formats])
+1. Outline Prep     → OUTLINE.md + CHARACTER_BIBLE.md
+2. Language Setting  → LANGUAGE_SETTING.json
+3. Style Config      → STYLE_SETTING.json
+4. Chapter Writing   → {project}/draft/ (subagent + proof-reader)
+5. Export            → {project}/output/ ([formats])
+
+Proceed? (or adjust any setting before starting)
+```
+
+**Fusion mode:**
+```
+Novel Fusion Pipeline initialized.
+
+Source novel: [file path]
+Fusion outline: [file path or "to be provided"]
+Title: [detected or "to be determined"]
+
+Pipeline configuration:
+- Mode: Fusion (expand existing novel)
+- Words/chapter (new chapters): [N] 字 target
+- Language: [Monolingual zh / Bilingual zh→en / Dialogue-bilingual zh+ja]
+- Genre: [detected or "to be configured"]
+- Writer persona: [name or "default (first .yaml)"]
+- Output: [formats]
+
+Phases:
+1F. Novel Fusion    → Source split + Fused OUTLINE.md + CHARACTER_BIBLE.md + CONTINUITY_MAP.md
+2.  Language Setting → LANGUAGE_SETTING.json
+3.  Style Config     → STYLE_SETTING.json
+4.  Chapter Writing  → {project}/draft/ (passthrough copies + subagent writes + proof-reader)
+5.  Export           → {project}/output/ ([formats])
 
 Proceed? (or adjust any setting before starting)
 ```
@@ -199,41 +195,103 @@ Proceed? (or adjust any setting before starting)
 If AUTO_PROCEED=false: wait for user confirmation.
 If AUTO_PROCEED=true: proceed after presenting the overview.
 
-### Phase 1: Character Design
+### Phase 1: Outline Structuring + Character Extraction (Standard Mode)
 
-Invoke `/character-design`:
+**If PIPELINE_MODE = "fusion"** → skip to Phase 1F below.
 
-```
-/character-design "novel/OUTLINE.md"
-```
+**Skip conditions:** If `{project}/OUTLINE.md` already exists AND is structured (has per-chapter `### Plot Beats` sections), AND `{project}/characters/CHARACTER_BIBLE.md` exists → skip to Phase 2. Report: "Structured outline and character bible found — skipping Phase 1."
 
-This reads the outline and produces `novel/characters/CHARACTER_BIBLE.md` with full profiles for all major/supporting characters.
-
-**🚦 Gate 1 — Character Review:**
-
-After `CHARACTER_BIBLE.md` is generated, present a summary:
+Otherwise, invoke `/novel-outline`:
 
 ```
-Character Bible complete.
+/novel-outline "[source-file] chapters:[N] words:[CHAPTER_WORD_COUNT]"
+```
 
-Characters designed:
+This does three things:
+1. Reads the raw source material (PDF/text/markdown)
+2. Produces a structured `{project}/OUTLINE.md` with per-chapter beats, character lists, emotional arcs
+3. Creates `{project}/characters/CHARACTER_BIBLE.md` if absent (character extraction is a byproduct of outline analysis)
+
+If images are extracted from a PDF source, `/novel-outline` also creates `{project}/assets/IMAGE_MAP.json`.
+
+**🚦 Gate 1 — Outline + Character Review:**
+
+After generation, present a summary:
+
+```
+Phase 1 complete.
+
+Structured outline: {project}/OUTLINE.md
+- Chapters: [N]
+- Plot beats per chapter: [avg N]
+- Act structure: [summary]
+
+Character bible: {project}/characters/CHARACTER_BIBLE.md
 - Major: [N] — [names]
 - Supporting: [N] — [names]
 - Minor: [N]
+[Images: [N] extracted, [N] assigned to chapters]
 
-Key relationships:
-- [Brief summary]
-
-Please review novel/characters/CHARACTER_BIBLE.md.
-Any characters to add, remove, or adjust?
+Please review both files.
+Adjust outline beats, chapter divisions, or character profiles?
 ```
 
 **If AUTO_PROCEED=false:** Wait for user response. Options:
 - **"OK" / "go"** → proceed to Phase 2
-- **Add a character** → call `/character-design "add: [description]"`, update the bible
-- **Modify a character** → edit the bible directly or describe changes
+- **Adjust chapters** → re-run `/novel-outline` with different chapter count
+- **Add/modify characters** → call `/character-design "add: [description]"` or edit directly
 - **"stop"** → save state, pipeline pauses here
 
+**If AUTO_PROCEED=true:** Present summary, proceed immediately.
+
+**State**: Write `NOVEL_STATE.json` with `phase: 1`.
+
+### Phase 1F: Novel Fusion (Fusion Mode Only)
+
+**Only runs when PIPELINE_MODE = "fusion".** Skip if standard mode.
+
+Invoke `/novel-fusion`:
+
+```
+/novel-fusion "[FUSION_SOURCE] [outline-file]"
+```
+
+This does:
+1. Reads the source novel, splits into chapters → `{project}/source/`
+2. Reads the fusion outline (what to add/change)
+3. Builds a fusion map (passthrough / modify / new for each final chapter)
+4. Generates fused `{project}/OUTLINE.md` with `TYPE:` annotations
+5. Creates `{project}/characters/CHARACTER_BIBLE.md` (merged from source novel + fusion outline)
+6. Creates `{project}/settings/CONTINUITY_MAP.md`
+7. Creates `{project}/source/SOURCE_INDEX.md`
+8. Writes `NOVEL_STATE.json` with `"mode": "fusion"`
+
+**🚦 Gate 1F — Fusion Review:**
+
+```
+Phase 1F complete.
+
+Source novel: [title] ([N] chapters, ~[N] words)
+Fusion result: [N] total chapters
+  - [N] passthrough (source as-is)
+  - [N] new (original content)
+  - [N] modify (source with changes)
+
+Files created:
+- {project}/source/          ← [N] source chapter files
+- {project}/OUTLINE.md       ← fused outline with TYPE annotations
+- {project}/characters/CHARACTER_BIBLE.md
+- {project}/settings/CONTINUITY_MAP.md
+
+Please review the outline — especially:
+- Continuity anchors for new chapters
+- Modification instructions for modify chapters
+- Whether any passthrough chapters need upgrading to modify
+
+Adjust? (or proceed to language configuration)
+```
+
+**If AUTO_PROCEED=false:** Wait for user response.
 **If AUTO_PROCEED=true:** Present summary, proceed immediately.
 
 **State**: Write `NOVEL_STATE.json` with `phase: 1`.
@@ -246,15 +304,16 @@ Invoke `/language-setting`:
 /language-setting "[PRIMARY_LANGUAGE] [— SECONDARY_LANGUAGE if bilingual]"
 ```
 
-This produces `novel/settings/LANGUAGE_SETTING.json` and creates draft directories.
+This produces `{project}/settings/LANGUAGE_SETTING.json` and creates draft directories.
 
 **🚦 Gate 2 — Language Confirmation:**
 
 ```
 Language configuration:
-- Mode: [Monolingual / Bilingual]
+- Mode: [Monolingual / Bilingual / Dialogue-bilingual]
 - Primary: [language name]
-[- Secondary: [language name] (translation: [style], [timing])]
+[- Secondary: [language name] (translation: [style], [timing])]             (bilingual)
+[- Writing language: [name], Dialogue language: [name] (style: [style])]    (dialogue-bilingual)
 
 Confirm? (or adjust)
 ```
@@ -272,7 +331,7 @@ Invoke `/novel-style`:
 /novel-style "[GENRE] — [CHAPTER_WORD_COUNT]字"
 ```
 
-This produces `novel/settings/STYLE_SETTING.json` and `novel/settings/CHAPTER_TEMPLATE.md`.
+This produces `{project}/settings/STYLE_SETTING.json` and `{project}/settings/CHAPTER_TEMPLATE.md`.
 
 **🚦 Gate 3 — Style Confirmation:**
 
@@ -302,21 +361,34 @@ Invoke `/novel-write`:
 /novel-write "all"
 ```
 
-This writes all chapters from the outline sequentially:
-- Reads each chapter's outline beats
-- Maintains character consistency against `CHARACTER_BIBLE.md`
-- Adds new characters to the bible as they appear
-- Applies style settings from `STYLE_SETTING.json`
-- Handles bilingual translation if configured
-- Saves each chapter to `novel/draft/chNN.md`
+This writes all chapters using the orchestrator + subagent + proof-reader pattern:
+
+For each chapter:
+1. Main agent loads context and assembles a writing brief
+2. Writing subagent generates the chapter draft
+3. Main agent runs proof-reader checks (character bible, timeline, language quality, contamination, glossary)
+4. If NEEDS_REVISION: fix and re-review (max 2 cycles)
+5. Save final draft, update state
+
+- Handles monolingual, bilingual, and dialogue-bilingual modes
+- Adds new characters to the bible as they appear (stubs created before writing)
+- Saves each chapter to the appropriate path per language mode
+
+**Fusion mode behavior**: `/novel-write` reads the `TYPE:` annotation on each chapter and routes accordingly:
+- **passthrough** → copy source file to draft (fast, no subagent)
+- **new** → full write with continuity anchors from adjacent source chapters
+- **modify** → rewrite source chapter with modification instructions, matching source voice
+
+See `/novel-write` Fusion Mode section for details.
 
 **During writing, the pipeline updates `NOVEL_STATE.json` after each chapter.**
 
 Progress updates (presented after each chapter):
 ```
 Chapter [N]/[total] written — [N] 字
+Proof-reader: [PASS / PASS_WITH_NOTES / NEEDS_REVISION→fixed]
 [New character added: [name] (stub created)]
-[Translation: complete]
+[Language mode: dialogue-bilingual (ja→zh inline)]
 ```
 
 **If a chapter requires a new supporting/major character not in the bible:**
@@ -335,7 +407,7 @@ Writing complete!
 
 Novel: [Title]
 Total chapters: [N] | Total words: ~[N]
-Draft location: novel/draft/
+Draft location: {project}/draft/
 
 To export:
 /novel-export "[OUTPUT_FORMAT]"
@@ -368,12 +440,12 @@ After the full pipeline completes:
 
 | File | Description |
 |------|-------------|
-| novel/OUTLINE.md | Source outline |
-| novel/characters/CHARACTER_BIBLE.md | [N] characters profiled |
-| novel/settings/STYLE_SETTING.json | Genre: [genre], [N] 字/chapter |
-| novel/settings/LANGUAGE_SETTING.json | [Mode], Primary: [lang] |
-| novel/draft/chNN.md (×N) | [N] chapters, ~[total] words |
-| novel/output/novel.[ext] | [formats] |
+| {project}/OUTLINE.md | Source outline |
+| {project}/characters/CHARACTER_BIBLE.md | [N] characters profiled |
+| {project}/settings/STYLE_SETTING.json | Genre: [genre], [N] 字/chapter |
+| {project}/settings/LANGUAGE_SETTING.json | [Mode], Primary: [lang] |
+| {project}/draft/chNN.md (×N) | [N] chapters, ~[total] words |
+| {project}/output/novel.[ext] | [formats] |
 
 ## Novel Statistics
 - Chapters: [N]
@@ -395,14 +467,14 @@ After the full pipeline completes:
 
 - **Output versioning**: write timestamped copies before overwriting any existing file (CHARACTER_BIBLE, NOVEL_STATE, chapter files if restyling)
 - **Large file handling**: if Write fails, retry with Bash heredoc silently
-- **Manifest**: log every output file to `novel/MANIFEST.md`
+- **Manifest**: log every output file to `{project}/MANIFEST.md`
 
 ```bash
 # MANIFEST.md format
 | Timestamp | Skill | File | Description |
 |-----------|-------|------|-------------|
-| [time] | /character-design | novel/characters/CHARACTER_BIBLE.md | [N] characters |
-| [time] | /novel-write | novel/draft/ch01.md | Chapter 1, [N] words |
+| [time] | /character-design | {project}/characters/CHARACTER_BIBLE.md | [N] characters |
+| [time] | /novel-write | {project}/draft/ch01.md | Chapter 1, [N] words |
 ```
 
 ## Key Rules
@@ -419,7 +491,11 @@ Each sub-skill can be called independently if you want to skip the full pipeline
 
 ```
 User has an outline and wants to start writing directly:
-novel/OUTLINE.md + CHARACTER_BIBLE.md exist → /novel-write "all"
+{project}/OUTLINE.md + CHARACTER_BIBLE.md exist → /novel-write "all"
+
+User wants to expand an existing novel with new content:
+/novel-fusion "source_novel.docx fusion_outline.md"
+→ then /language-setting, /novel-style, /novel-write "all"
 
 User wants to add a new character mid-story:
 /character-design "add: [character description] — appears in Ch 8"
@@ -429,6 +505,15 @@ User wants to re-export in a different format:
 
 User wants to change the style and restyle existing chapters:
 /novel-style "literary, 4000字" → then /novel-write "ch01-ch05 --restyle"
+
+User wants to review existing chapters for quality:
+/proof-reader "ch01-ch05"
+
+User wants to switch to dialogue-bilingual mode:
+/language-setting "dialogue-bilingual zh台词ja"
+
+User wants to restructure the outline for a new source:
+/novel-outline "new_source.pdf chapters:15 words:5000"
 ```
 
 ## Typical Timeline
@@ -439,7 +524,7 @@ User wants to change the style and restyle existing chapters:
 | 1. Character Design | 10–20 min | After Gate 1 |
 | 2. Language Config | 2 min | After Gate 2 |
 | 3. Style Config | 3 min | After Gate 3 |
-| 4. Chapter Writing | 5–15 min/chapter | Yes ✅ |
+| 4. Chapter Writing | 5–15 min/chapter (subagent write + proof-reader review) | Yes ✅ |
 | 5. Export | 2–5 min | Yes if AUTO_EXPORT=true ✅ |
 
 **Sweet spot**: configure and confirm Gates 1–3 in an afternoon session, run `/novel-write all` overnight, wake up to a finished draft ready to export.

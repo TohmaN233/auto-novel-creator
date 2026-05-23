@@ -1,0 +1,17 @@
+{
+  "mode": "dialogue-bilingual",
+  "writing_language": "zh",
+  "writing_language_name": "简体中文",
+  "dialogue_language": "ja",
+  "dialogue_language_name": "日本語",
+  "dialogue_format": {
+    "original_wrapper": "「{text}」",
+    "translation_wrapper": "（{text}）",
+    "placement": "next-line"
+  },
+  "translation_style": "literary",
+  "output_filenames": {
+    "primary": "novel_zh"
+  },
+  "configured_at": "2026-05-21T00:00:00Z"
+}

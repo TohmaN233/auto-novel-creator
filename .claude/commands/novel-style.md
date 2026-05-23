@@ -9,9 +9,13 @@ allowed-tools: Read, Write, Edit, Bash(*)
 
 Configure writing style for: **$ARGUMENTS**
 
+## Project Resolution
+
+Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
+
 ## Overview
 
-This skill establishes and persists the writing style configuration. Settings are saved to `novel/settings/STYLE_SETTING.json` and read by every call to `/novel-write`. Once set, the style governs tone, pacing, chapter length, and narrative perspective across the entire novel.
+This skill establishes and persists the writing style configuration. Settings are saved to `{project}/settings/STYLE_SETTING.json` and read by every call to `/novel-write`. Once set, the style governs tone, pacing, chapter length, and narrative perspective across the entire novel.
 
 ## Parsing Arguments
 
@@ -117,7 +121,7 @@ Skip this step if no `.md` file path was detected in `$ARGUMENTS`.
 
 **1. Locate the file** — try these paths in order until one resolves:
    1. Exact path as given (absolute or relative to CWD)
-   2. `novel/[path]`
+   2. `{project}/[path]`
    3. Project root `[path]`
 
 **2. If found** — read the full file content. This becomes `custom_style_content` and is used as the primary `style_notes` in Step 3, replacing the genre-generated guidance. Show a one-line confirmation:
@@ -201,7 +205,7 @@ Based on the settings, generate a brief prose style guide that `/novel-write` wi
 }
 ```
 
-Save to `novel/settings/STYLE_SETTING.json`.
+Save to `{project}/settings/STYLE_SETTING.json`.
 
 ### Step 4: Chapter Template
 
@@ -222,7 +226,7 @@ Scene transitions:
 - Each section should have a clear purpose; delete any section that could be removed without the reader noticing
 ```
 
-Save chapter template to `novel/settings/CHAPTER_TEMPLATE.md`.
+Save chapter template to `{project}/settings/CHAPTER_TEMPLATE.md`.
 
 ### Step 5: Confirm Output
 
@@ -235,8 +239,8 @@ Prose: [density] | Rhythm: [rhythm] | Dialogue: [density]
 [Custom style: [filename] (live — edits take effect immediately)]   ← only if custom file used
 
 Files:
-- novel/settings/STYLE_SETTING.json
-- novel/settings/CHAPTER_TEMPLATE.md
+- {project}/settings/STYLE_SETTING.json
+- {project}/settings/CHAPTER_TEMPLATE.md
 [- [custom_style_file path] (referenced, not copied)]               ← only if custom file used
 
 Next steps:

@@ -9,9 +9,13 @@ allowed-tools: Bash(*), Read, Write, Edit, Glob
 
 Export the novel to: **$ARGUMENTS**
 
+## Project Resolution
+
+Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
+
 ## Overview
 
-This skill assembles all chapter drafts from `novel/draft/` into a single document and exports to the requested output format(s). Bilingual novels produce separate files per language.
+This skill assembles all chapter drafts from `{project}/draft/` into a single document and exports to the requested output format(s). Bilingual novels produce separate files per language.
 
 Supported formats:
 
@@ -26,18 +30,18 @@ Supported formats:
 
 Before exporting:
 
-1. Check `novel/draft/` (monolingual) or `novel/draft/[lang-code]/` (bilingual) for chapter files
-2. Check `novel/settings/LANGUAGE_SETTING.json` for language mode and file naming
-3. Check `novel/NOVEL_STATE.json` for novel title and chapter count
+1. Check `{project}/draft/` (monolingual) or `{project}/draft/[lang-code]/` (bilingual) for chapter files
+2. Check `{project}/settings/LANGUAGE_SETTING.json` for language mode and file naming
+3. Check `{project}/NOVEL_STATE.json` for novel title and chapter count
 4. Verify at least one chapter file exists
 5. **Check for image assets** (see Step 0 below)
 
 ```bash
 # Check chapter count
-ls novel/draft/ch*.md 2>/dev/null | wc -l
+ls {project}/draft/ch*.md 2>/dev/null | wc -l
 ```
 
-If no chapters found: "⚠️ No chapter files found in `novel/draft/`. Run `/novel-write` first."
+If no chapters found: "⚠️ No chapter files found in `{project}/draft/`. Run `/novel-write` first."
 
 If some chapters are missing (gaps in sequence): warn and ask whether to export what exists or wait.
 
@@ -45,12 +49,12 @@ If some chapters are missing (gaps in sequence): warn and ask whether to export 
 
 Before assembling chapters, check if there are image assets that need to be mapped and placed into chapter files.
 
-**Trigger condition**: `novel/assets/` directory exists AND contains image files (`.jpeg`, `.png`, `.jpg`).
+**Trigger condition**: `{project}/assets/` directory exists AND contains image files (`.jpeg`, `.png`, `.jpg`).
 
 ```python
 import pathlib, json
 
-assets_dir = pathlib.Path("novel/assets")
+assets_dir = pathlib.Path("{project}/assets")
 has_assets = assets_dir.exists() and any(assets_dir.glob("*.jpeg")) or any(assets_dir.glob("*.png"))
 
 if has_assets:
@@ -71,7 +75,7 @@ if has_assets:
 
 | Condition | Action |
 |-----------|--------|
-| No `novel/assets/` dir | Skip — no images to process |
+| No `{project}/assets/` dir | Skip — no images to process |
 | `IMAGE_MAP.json` missing | Run `/asset-map all` (full pipeline: scan → filter → place) |
 | All selected images are `placed` | Skip — images already in chapter files, ready for export |
 | Selected images exist but NOT `placed` | Run `/asset-map place` (Phase 4 only: copy + insert into chapters) |
@@ -117,12 +121,12 @@ xelatex --version 2>/dev/null && echo "xelatex: OK" || \
 # Verify all images referenced in chapter files actually exist
 python3 - <<'PY'
 import re, pathlib
-draft = pathlib.Path("novel/draft")
+draft = pathlib.Path("{project}/draft")
 missing = []
 found = 0
 for md_file in sorted(draft.rglob("ch*.md")):
     text = md_file.read_text(encoding="utf-8")
-    for m in re.finditer(r'!\[.*?\]\((novel/assets/[^)]+)\)', text):
+    for m in re.finditer(r'!\[.*?\]\(({project}/assets/[^)]+)\)', text):
         img_path = pathlib.Path(m.group(1))
         if not img_path.exists():
             missing.append(f"{md_file.name}: {img_path}")
@@ -138,7 +142,7 @@ else:
 PY
 ```
 
-If any images are missing, warn and skip embedding them (do not abort the export). Images in `novel/assets/export/` are the curated copies produced by `/asset-map`; original images stay in `novel/assets/`.
+If any images are missing, warn and skip embedding them (do not abort the export). Images in `{project}/assets/export/` are the curated copies produced by `/asset-map`; original images stay in `{project}/assets/`.
 
 **Image support by format:**
 | Format | Inline images | Notes |
@@ -158,7 +162,7 @@ If PDF requested and no engine found:
 
 ### Step 2: Load Metadata
 
-Read from `novel/NOVEL_STATE.json` and `novel/settings/LANGUAGE_SETTING.json`:
+Read from `{project}/NOVEL_STATE.json` and `{project}/settings/LANGUAGE_SETTING.json`:
 
 ```json
 {
@@ -184,7 +188,7 @@ If title is missing from the state file, ask: "What is the novel's title? (Used 
 python3 - <<'PY'
 import re, pathlib
 
-draft = pathlib.Path("novel/draft")
+draft = pathlib.Path("{project}/draft")
 chapters = sorted(
     [p for p in draft.glob("ch*.md") if p.is_file()],
     key=lambda p: int(re.search(r"\d+", p.stem).group())
@@ -209,7 +213,7 @@ PY
 python3 -c "
 import re, pathlib
 lang = 'zh'  # replace with actual primary lang code
-draft = pathlib.Path(f'novel/draft/{lang}')
+draft = pathlib.Path(f'{project}/draft/{lang}')
 chapters = sorted(draft.glob('ch*.md'), key=lambda p: int(__import__('re').search(r'\d+', p.stem).group()))
 full = '\n\n---\n\n'.join(p.read_text(encoding='utf-8') for p in chapters)
 (draft.parent / f'FULL_NOVEL_{lang}.md').write_text(full, encoding='utf-8')
@@ -220,7 +224,7 @@ print(f'{lang}: {len(chapters)} chapters assembled')
 python3 -c "
 import re, pathlib
 lang = 'en'  # replace with actual secondary lang code
-draft = pathlib.Path(f'novel/draft/{lang}')
+draft = pathlib.Path(f'{project}/draft/{lang}')
 chapters = sorted(draft.glob('ch*.md'), key=lambda p: int(__import__('re').search(r'\d+', p.stem).group()))
 full = '\n\n---\n\n'.join(p.read_text(encoding='utf-8') for p in chapters)
 (draft.parent / f'FULL_NOVEL_{lang}.md').write_text(full, encoding='utf-8')
@@ -230,17 +234,21 @@ print(f'{lang}: {len(chapters)} chapters assembled')
 
 ### Step 4: Run Export Commands
 
-Run the appropriate pandoc command for each format, substituting:
-- Source file: `novel/draft/FULL_NOVEL.md` (or `FULL_NOVEL_[lang].md` for bilingual)
-- Output file: `novel/output/[title_slugified].[ext]` (or `[title_slugified]_[lang].[ext]` for bilingual)
+Read `../shared-references/novel-output-formats.md` for the exact pandoc commands for each format.
+
+Apply the commands with the novel's actual metadata:
+
+**For each requested format, run the appropriate pandoc command from the shared reference**, substituting:
+- Source file: `{project}/draft/FULL_NOVEL.md` (or `FULL_NOVEL_[lang].md` for bilingual)
+- Output file: `{project}/output/[title_slugified].[ext]` (or `[title_slugified]_[lang].[ext]` for bilingual)
 - Title metadata: novel title from state
 - Author metadata: from state (or "Anonymous")
 - Language code: from LANGUAGE_SETTING.json
 
 Example resolved command for EPUB (Chinese novel):
 ```bash
-pandoc novel/draft/FULL_NOVEL.md \
-  -o "novel/output/novel_zh.epub" \
+pandoc {project}/draft/FULL_NOVEL.md \
+  -o "{project}/output/novel_zh.epub" \
   --toc --toc-depth=1 \
   --metadata title="[Title]" \
   --metadata author="[Author]" \
@@ -249,7 +257,7 @@ pandoc novel/draft/FULL_NOVEL.md \
 
 Create the output directory first:
 ```bash
-mkdir -p novel/output
+mkdir -p {project}/output
 ```
 
 **Run exports sequentially** (each format is independent but let one finish before starting the next to avoid I/O conflicts).
@@ -260,13 +268,13 @@ For each generated file:
 
 ```bash
 # Verify file exists and has content
-ls -lh novel/output/novel*.* 2>/dev/null
+ls -lh {project}/output/novel*.* 2>/dev/null
 ```
 
 - TXT: check file size > 1KB
 - DOCX: check file size > 10KB
-- PDF: check file size > 50KB; count pages with `pdfinfo novel/output/novel.pdf | grep Pages`
-- EPUB: check file size > 5KB; optionally validate with `epubcheck novel/output/novel.epub` if available
+- PDF: check file size > 50KB; count pages with `pdfinfo {project}/output/novel.pdf | grep Pages`
+- EPUB: check file size > 5KB; optionally validate with `epubcheck {project}/output/novel.epub` if available
 
 If a file is suspiciously small (< 1KB), re-run that format's export with verbose output to diagnose the issue.
 
@@ -274,18 +282,18 @@ If a file is suspiciously small (< 1KB), re-run that format's export with verbos
 
 If `LANGUAGE_SETTING.json` has `"translation_timing": "post-writing"` and this is the first export:
 
-Check `novel/NOVEL_STATE.json` for chapters missing their secondary-language translation:
+Check `{project}/NOVEL_STATE.json` for chapters missing their secondary-language translation:
 
 ```python
 # Chapters present in primary but not secondary language
-primary_chapters = set(p.stem for p in Path("novel/draft/zh").glob("ch*.md"))
-secondary_chapters = set(p.stem for p in Path("novel/draft/en").glob("ch*.md"))
+primary_chapters = set(p.stem for p in Path("{project}/draft/zh").glob("ch*.md"))
+secondary_chapters = set(p.stem for p in Path("{project}/draft/en").glob("ch*.md"))
 missing = sorted(primary_chapters - secondary_chapters)
 ```
 
 If any chapters lack a translation:
 1. Translate each missing chapter using the style from `LANGUAGE_SETTING.json`
-2. Save to `novel/draft/[secondary-code]/chNN.md`
+2. Save to `{project}/draft/[secondary-code]/chNN.md`
 3. After all translations are done, re-run Step 3 to reassemble the secondary-language full novel
 4. Then export the secondary-language files
 
@@ -306,15 +314,15 @@ Present a table:
 
 | Format | File | Size | Status |
 |--------|------|------|--------|
-| TXT | novel/output/novel.txt | 150 KB | ✅ |
-| DOCX | novel/output/novel.docx | 380 KB | ✅ |
-| PDF | novel/output/novel.pdf | 1.2 MB | ✅ (42 pages) |
-| EPUB | novel/output/novel.epub | 210 KB | ✅ |
+| TXT | {project}/output/novel.txt | 150 KB | ✅ |
+| DOCX | {project}/output/novel.docx | 380 KB | ✅ |
+| PDF | {project}/output/novel.pdf | 1.2 MB | ✅ (42 pages) |
+| EPUB | {project}/output/novel.epub | 210 KB | ✅ |
 
 ```
 [For bilingual:]
-Primary ([lang]): novel/output/novel_zh.*
-Secondary ([lang]): novel/output/novel_en.*
+Primary ([lang]): {project}/output/novel_zh.*
+Secondary ([lang]): {project}/output/novel_en.*
 ```
 
 ## Partial Export
@@ -325,23 +333,23 @@ To export specific chapters only (e.g., for a preview):
 /novel-export "ch01-ch05 epub"
 ```
 
-Assemble only the specified chapters, export to `novel/output/preview_ch01-ch05.epub`.
+Assemble only the specified chapters, export to `{project}/output/preview_ch01-ch05.epub`.
 
 ## Cover Image
 
-If `novel/assets/cover.jpg` (or `.png`) exists, it is automatically used as the EPUB cover.
+If `{project}/assets/cover.jpg` (or `.png`) exists, it is automatically used as the EPUB cover.
 
 To generate a simple placeholder cover (text-only, no external tool required):
 ```python
 # Generate minimal cover HTML → convert to image is complex; instead note it as TODO
 ```
 
-If no cover image exists: note in the report "No cover image found. Add `novel/assets/cover.jpg` for EPUB cover."
+If no cover image exists: note in the report "No cover image found. Add `{project}/assets/cover.jpg` for EPUB cover."
 
 ## Key Rules
 
 - **Large file handling**: If Write fails, retry with Bash heredoc. Do not ask for permission.
-- **Never overwrite without backing up**: if `novel/output/` already has files from a previous export, back them up to `novel/output/backup-[timestamp]/` before re-exporting.
-- **Export is read-only** with respect to the chapter drafts — never modify `novel/draft/` files during export.
+- **Never overwrite without backing up**: if `{project}/output/` already has files from a previous export, back them up to `{project}/output/backup-[timestamp]/` before re-exporting.
+- **Export is read-only** with respect to the chapter drafts — never modify `{project}/draft/` files during export.
 - **Missing secondary language chapters**: if translation_timing is `post-writing`, do the translations as part of this export rather than blocking.
 - **Graceful degradation**: if one format fails, complete the others and report the failure clearly. Do not abort the entire export.
