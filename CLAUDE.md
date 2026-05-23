@@ -46,7 +46,7 @@ The proof-reader is a **skill** the editor invokes, not a separate agent. The ed
 | "有什么东西" | ≤ 1 | exact search |
 | Metaphor density | ≤ 2/thousand chars | grep + count |
 | AI boilerplate | 0 | pattern blacklist |
-| Sensor-tic (tgy) | 0 | no quantified perception |
+| Sensor-tic  | 0 | no quantified perception |
 | Ch-meta leakage | 0 | no `chNN`, `Beat N` in prose |
 
 ## Available Skills
