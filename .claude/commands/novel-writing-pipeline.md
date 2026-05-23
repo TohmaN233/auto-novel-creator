@@ -57,12 +57,11 @@ This pipeline supports two modes:
 
 **Phase 1F (fusion)** — `/novel-fusion` reads an existing novel + a fusion outline, splits the source into chapters, and generates a fused `OUTLINE.md` with three chapter types (passthrough/modify/new), plus `CHARACTER_BIBLE.md`, `SOURCE_INDEX.md`, and `CONTINUITY_MAP.md`.
 
-**Phase 4 architecture** — `/novel-write` uses a three-role pattern:
-- Main agent: orchestrator (context loading, brief assembly, quality control)
-- Writing subagent: prose generation (delegated via Agent tool)
-- Proof-reader: structured review (character consistency, timeline, language quality, contamination, glossary)
+**Phase 4 architecture** — `/novel-write` uses a two-agent pattern:
+- **Editor** (main agent): orchestrator — context loading, brief assembly, invokes `/proof-reader` skill for mechanical review, fixes issues directly
+- **Writer** (subagent): prose generation — delegated via Agent tool, writes to disk independently
 
-This separation ensures the creative pass and the critical pass have independent context, reducing blind-spot errors.
+The proof-reader is a skill the editor invokes, not a third agent. The key separation is between the editor and the writer — they never share context, so the editor reviews the draft without the writer's confirmation bias.
 
 **Persistent memory files** (live in `{project}/` throughout the pipeline):
 - `{project}/OUTLINE_RAW.md` — original source text (reference, never modified)
@@ -160,7 +159,7 @@ Phases:
 1. Outline Prep     → OUTLINE.md + CHARACTER_BIBLE.md
 2. Language Setting  → LANGUAGE_SETTING.json
 3. Style Config      → STYLE_SETTING.json
-4. Chapter Writing   → {project}/draft/ (subagent + proof-reader)
+4. Chapter Writing   → {project}/draft/ (subagent drafts, editor proof-reads)
 5. Export            → {project}/output/ ([formats])
 
 Proceed? (or adjust any setting before starting)
@@ -186,7 +185,7 @@ Phases:
 1F. Novel Fusion    → Source split + Fused OUTLINE.md + CHARACTER_BIBLE.md + CONTINUITY_MAP.md
 2.  Language Setting → LANGUAGE_SETTING.json
 3.  Style Config     → STYLE_SETTING.json
-4.  Chapter Writing  → {project}/draft/ (passthrough copies + subagent writes + proof-reader)
+4.  Chapter Writing  → {project}/draft/ (passthrough copies + subagent drafts + editor proof-reads)
 5.  Export           → {project}/output/ ([formats])
 
 Proceed? (or adjust any setting before starting)
@@ -361,7 +360,7 @@ Invoke `/novel-write`:
 /novel-write "all"
 ```
 
-This writes all chapters using the orchestrator + subagent + proof-reader pattern:
+This writes all chapters using the orchestrator + writer subagent pattern:
 
 For each chapter:
 1. Main agent loads context and assembles a writing brief
@@ -524,7 +523,7 @@ User wants to restructure the outline for a new source:
 | 1. Character Design | 10–20 min | After Gate 1 |
 | 2. Language Config | 2 min | After Gate 2 |
 | 3. Style Config | 3 min | After Gate 3 |
-| 4. Chapter Writing | 5–15 min/chapter (subagent write + proof-reader review) | Yes ✅ |
+| 4. Chapter Writing | 5–15 min/chapter (subagent draft + editor proof-read & fix) | Yes ✅ |
 | 5. Export | 2–5 min | Yes if AUTO_EXPORT=true ✅ |
 
 **Sweet spot**: configure and confirm Gates 1–3 in an afternoon session, run `/novel-write all` overnight, wake up to a finished draft ready to export.

@@ -57,14 +57,12 @@ These are your primary tools. Use them via the Skill tool:
 | `/novel-outline` | Convert raw source (PDF/text) → structured OUTLINE.md + CHARACTER_BIBLE |
 | `/language-setting` | Configure language mode (monolingual / bilingual / dialogue-bilingual) |
 | `/novel-style` | Configure genre, POV, word count, prose style |
-| `/novel-write` | Write chapters (orchestrator + subagent + proof-reader pattern) |
+| `/novel-write` | Write chapters (editor + writer subagent) |
 | `/novel-export` | Export to EPUB, DOCX, PDF, TXT |
 | `/proof-reader` | Review chapters for quality and consistency (standalone) |
 | `/character-design` | Design or update character profiles |
 | `/asset-map` | Map images from PDF to chapters |
 | `/novel-writing-pipeline` | End-to-end pipeline orchestrator |
-| `/translate-text` | Batch translate with glossary |
-| `/proofread-translation` | Review translation quality |
 
 ## Project Resolution
 

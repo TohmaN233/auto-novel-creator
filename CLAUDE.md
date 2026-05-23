@@ -2,15 +2,16 @@
 
 ## Overview
 
-This is a structured novel-writing pipeline powered by Claude Code. It uses an **orchestrator + subagent + proof-reader** pattern to produce long-form fiction with consistent quality.
+This is a structured novel-writing pipeline powered by Claude Code. It uses an **orchestrator + writer subagent** pattern to produce long-form fiction with consistent quality. The proof-reader is a skill the orchestrator invokes, not a separate agent.
 
 ## Architecture
 
-### Three Roles
+### Two Agents
 
-1. **Editor (you, the orchestrator)** — loads context, delegates writing, reviews output, maintains state files
+1. **Editor (you, the orchestrator / main agent)** — loads context, delegates writing, invokes `/proof-reader` skill for mechanical review, fixes issues, maintains state files
 2. **Writer (subagent, spawned via Agent tool)** — reads all project files independently, writes chapter to disk, updates craft memory
-3. **Proof-reader (skill invocation)** — mechanical quality review across 6 categories
+
+The proof-reader is a **skill** the editor invokes, not a separate agent. The editor and proof-reader share the same context — the separation that matters is between the editor and the writer.
 
 ### Core Principles
 
@@ -36,7 +37,7 @@ This is a structured novel-writing pipeline powered by Claude Code. It uses an *
 7. Editor fixes issues via Edit tool (no re-spawn)
 8. Update `NOVEL_STATE.json`, `TIMELINE.md`, `CONTINUITY_MAP.md`
 
-## Quality Hard Constraints (per chapter)
+## Quality Hard Constraints (per chapter) 
 
 | Constraint | Limit | Check |
 |-----------|-------|-------|
@@ -62,8 +63,6 @@ This is a structured novel-writing pipeline powered by Claude Code. It uses an *
 | `/asset-map` | Map images from source to chapters |
 | `/novel-writing-pipeline` | End-to-end pipeline orchestrator |
 | `/novel-fusion` | Set up fusion mode (expand existing novel) |
-| `/translate-text` | Batch translate with glossary |
-| `/proofread-translation` | Review translation quality |
 
 ## File Structure
 

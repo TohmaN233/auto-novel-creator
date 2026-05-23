@@ -13,9 +13,9 @@ Write novel chapters: **$ARGUMENTS**
 
 Read `.claude/active-project.json` → `project_dir`. All paths below use `{project}` as shorthand (default: `novel`). Override via argument if needed.
 
-## Architecture: Orchestrator + Subagent + Proof-Reader
+## Architecture: Orchestrator + Subagent
 
-This skill uses a three-role pattern:
+This skill uses a two-agent pattern (the proof-reader is a skill the orchestrator invokes, not a separate agent):
 
 ```
 Main Agent (you) ─── orchestrator
