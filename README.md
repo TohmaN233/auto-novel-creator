@@ -494,6 +494,21 @@ Each novel lives in its own directory. Configure `.claude/active-project.json`:
 
 ---
 
+## AI-Generated Fiction in General
+
+Let's be honest: AI-generated novels, with current technology, are not ready for professional publication. What this pipeline produces is best described as a **high-quality first draft** — structurally coherent, character-consistent, and stylistically controlled, but still recognizably machine-written to a careful reader. The prose tends toward a certain uniformity of rhythm, the emotional beats can feel mechanically placed, and genuinely surprising creative choices are rare.
+
+This tool is best suited for:
+
+- **Personal enjoyment** — turning your worldbuilding notes into a readable novel for yourself and friends
+- **Rapid prototyping** — generating a full draft to see if a story concept works before investing human writing time
+- **Fan fiction / derivative works** — where the source material provides rich structure to build on
+- **Learning** — studying how an AI interprets your outline can teach you about story structure
+
+If you want to push toward publication quality, the two-agent review architecture helps — but ultimately, a human editor remains essential.
+
+---
+
 ## License
 
 MIT
