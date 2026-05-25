@@ -6,7 +6,6 @@ A structured novel-writing system for [Claude Code](https://docs.anthropic.com/e
 
 It uses an **orchestrator + writer subagent** pattern: the main agent acts as editor, a writer persona drafts each chapter in independent context, and the editor invokes a `/proof-reader` skill for mechanical quality checks before fixing issues itself. The two agents never share context, which eliminates blind spots.
 
-Battle-tested on a 33-chapter, 250,000+ character novel with bilingual dialogue (Chinese narration / Japanese dialogue), fusion expansion of an existing work, and 38 embedded illustrations.
 
 ---
 
