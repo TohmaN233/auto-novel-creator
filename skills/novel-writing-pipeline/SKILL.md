@@ -35,4 +35,3 @@ Commands live in `.claude/commands/`.
    - `/novel-fusion` — expand an existing novel
    - `/novel-export` — EPUB / DOCX / PDF / TXT
 4. Keep the editor/writer boundary: the editor does not pre-digest content files for the writer. Pass paths. The writer reads originals.
-5. Do not invent product features that are not in the README. Maker is TohmaN233.
