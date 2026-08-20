@@ -65,8 +65,16 @@ Token limit hit at chapter 17? Close the terminal, reopen, run `/novel-write "co
 
 ## Quick Start
 
+Install as a Claude Code skill:
+
+```
+npx skills add TohmaN233/auto-novel-creator
+```
+
+Or clone the repo:
+
 ```bash
-git clone https://github.com/user/claude-novel-pipeline.git my-novel
+git clone https://github.com/TohmaN233/auto-novel-creator.git my-novel
 cd my-novel
 claude --system-prompt-file ".claude/system-prompt.md"
 ```
@@ -465,7 +473,7 @@ claude-novel-pipeline/
 ### Setup
 
 ```bash
-git clone https://github.com/user/claude-novel-pipeline.git my-novel
+git clone https://github.com/TohmaN233/auto-novel-creator.git my-novel
 cd my-novel
 
 # Option A: Standard launch
