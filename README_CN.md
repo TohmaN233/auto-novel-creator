@@ -67,7 +67,7 @@ AI 写长文最大的问题是**自己看不出自己写得不好**。让同一�
 
 
 ```bash
-git clone https://github.com/user/claude-novel-pipeline.git my-novel
+git clone https://github.com/TohmaN233/auto-novel-creator.git my-novel
 cd my-novel
 claude --system-prompt-file ".claude/system-prompt.md"
 ```
